@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Canup Photo Organizer Help</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: #f3f3f3;
+      color: #111;
+      margin: 0;
+      padding: 0;
+    }
+    .window {
+      width: 920px;
+      margin: 18px auto;
+      border: 1px solid #7f9db9;
+      background: #fff;
+      box-shadow: 0 0 0 1px #d8d8d8 inset;
+    }
+    .titlebar {
+      background: linear-gradient(#dfeaf7, #bfd1ea);
+      border-bottom: 1px solid #7f9db9;
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+    .content {
+      padding: 18px 22px 24px 22px;
+      line-height: 1.45;
+    }
+    h1, h2 {
+      color: #003366;
+      margin-top: 0;
+    }
+    h2 {
+      margin-top: 24px;
+      border-bottom: 1px solid #d6d6d6;
+      padding-bottom: 4px;
+    }
+    ul {
+      margin-top: 8px;
+    }
+    .note {
+      border: 1px solid #c7d8ea;
+      background: #f4f8fc;
+      padding: 10px 12px;
+      margin: 12px 0;
+    }
+    .path {
+      font-family: Consolas, monospace;
+      background: #f5f5f5;
+      padding: 1px 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">Canup Photo Organizer Help</div>
+    <div class="content">
+      <h1>Welcome</h1>
+      <p>Canup Photo Organizer helps you review, compare, rename, move, copy, convert, rotate, rate, and organize image files using saved sessions.</p>
+
+      <h2>Getting Started</h2>
+      <ul>
+        <li>Start the application. If no sessions exist yet, the session editor opens automatically.</li>
+        <li>Enter a session name.</li>
+        <li>Select a source folder.</li>
+        <li>Optionally select destination folders for copy and move actions.</li>
+        <li>Choose which right-click actions should be visible.</li>
+        <li>Save the session.</li>
+      </ul>
+
+      <h2>Supported Files</h2>
+      <p>The application can load these source types:</p>
+      <ul>
+        <li>JPG / JPEG</li>
+        <li>PNG</li>
+        <li>GIF</li>
+        <li>TIFF / TIF</li>
+        <li>HEIC / HEIF</li>
+        <li>PDF</li>
+      </ul>
+
+      <h2>Main Window</h2>
+      <ul>
+        <li>The image grid is on the left.</li>
+        <li>The information pane is on the right.</li>
+        <li>The divider between them can be resized.</li>
+        <li>The File menu contains session commands.</li>
+        <li>The Undo menu opens the undo history window.</li>
+      </ul>
+
+      <h2>Selection and Navigation</h2>
+      <ul>
+        <li>Click to select one image.</li>
+        <li>Ctrl-click to add or remove an image from the selection.</li>
+        <li>Shift-click to select a range.</li>
+        <li>Double-click an image to open fullscreen view.</li>
+        <li>Arrow keys move a single selection.</li>
+        <li>Home and End jump to the first or last item.</li>
+        <li>Delete performs the same action as the Delete command.</li>
+      </ul>
+
+      <h2>Compare View</h2>
+      <p>Select exactly two images, then use the Compare action.</p>
+      <ul>
+        <li>The left image fills the left half of the screen.</li>
+        <li>The right image fills the right half of the screen.</li>
+        <li>Each image is scaled as large as possible within its half.</li>
+        <li>The filename, file size, and image dimensions are shown under each image.</li>
+      </ul>
+
+      <h2>Session Options</h2>
+      <ul>
+        <li>Show file name under thumbnail</li>
+        <li>Highlight date differences</li>
+        <li>Recurse subdirectories of source</li>
+        <li>Sort order</li>
+        <li>Visible actions</li>
+      </ul>
+
+      <div class="note">
+        <strong>Highlight date differences</strong> shows a yellow border on non-selected images when the date in the file name, the file modified date, and the EXIF date taken do not all match by date.
+      </div>
+
+      <h2>Undo History</h2>
+      <p>The Undo window shows recent changes for the current session.</p>
+      <ul>
+        <li>Each entry includes the timestamp, action, and file details.</li>
+        <li>Undo Selected rolls back the selected changes and removes them from the log.</li>
+        <li>Clear Selected removes selected log entries without changing any files.</li>
+      </ul>
+
+      <h2>Stored Data</h2>
+      <ul>
+        <li>Session settings: <span class="path">C:\ProgramData\PhotoOrganizer\PhotoOrganizer.config</span></li>
+        <li>Change log: <span class="path">C:\ProgramData\PhotoOrganizer\PhotoOrganizer.changes.ndjson</span></li>
+        <li>Undo backup folder: <span class="path">C:\ProgramData\PhotoOrganizer\UndoBackups</span></li>
+      </ul>
+
+      <h2>Notes</h2>
+      <ul>
+        <li>JPEG and PNG ratings use the Windows rating property system.</li>
+        <li>GIF rating is not supported.</li>
+        <li>PDF files use a first-page preview.</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
