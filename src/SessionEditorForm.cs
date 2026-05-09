@@ -13,6 +13,7 @@ namespace PictureOrganizer
         private readonly ListBox _destinationListBox;
         private readonly CheckedListBox _actionsCheckedListBox;
         private readonly CheckBox _showFileNameCheckBox;
+        private readonly CheckBox _showActionsInInfoPanelCheckBox;
         private readonly CheckBox _recurseSubdirectoriesCheckBox;
         private readonly CheckBox _highlightDateDifferencesCheckBox;
         private readonly ComboBox _sortOrderComboBox;
@@ -33,7 +34,7 @@ namespace PictureOrganizer
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MinimizeBox = false;
             MaximizeBox = false;
-            ClientSize = new Size(760, 520);
+            ClientSize = new Size(760, 570);
 
             Controls.Add(CreateLabel("Session name", 16, 18));
             _nameTextBox = CreateTextBox(session.Name, 120, 14, 610);
@@ -42,12 +43,12 @@ namespace PictureOrganizer
             GroupBox sourcesGroup = new GroupBox();
             sourcesGroup.Text = "Source folders";
             sourcesGroup.Location = new Point(16, 50);
-            sourcesGroup.Size = new Size(350, 320);
+            sourcesGroup.Size = new Size(350, 220);
             Controls.Add(sourcesGroup);
 
             _sourceListBox = new ListBox();
             _sourceListBox.Location = new Point(14, 28);
-            _sourceListBox.Size = new Size(320, 210);
+            _sourceListBox.Size = new Size(320, 120);
             foreach (string source in session.GetSourceFolders())
             {
                 _sourceListBox.Items.Add(source);
@@ -56,51 +57,51 @@ namespace PictureOrganizer
 
             Button addSourceButton = new Button();
             addSourceButton.Text = "Browse...";
-            addSourceButton.Location = new Point(36, 248);
+            addSourceButton.Location = new Point(36, 154);
             addSourceButton.Click += AddSourceButton_Click;
             sourcesGroup.Controls.Add(addSourceButton);
 
             Button removeSourceButton = new Button();
             removeSourceButton.Text = "Remove";
-            removeSourceButton.Location = new Point(128, 248);
+            removeSourceButton.Location = new Point(128, 154);
             removeSourceButton.Click += RemoveSourceButton_Click;
             sourcesGroup.Controls.Add(removeSourceButton);
 
             _recurseSubdirectoriesCheckBox = new CheckBox();
             _recurseSubdirectoriesCheckBox.AutoSize = true;
-            _recurseSubdirectoriesCheckBox.Location = new Point(14, 286);
+            _recurseSubdirectoriesCheckBox.Location = new Point(14, 188);
             _recurseSubdirectoriesCheckBox.Text = "Recurse subdirectories of source";
             _recurseSubdirectoriesCheckBox.Checked = session.RecurseSubdirectories;
             sourcesGroup.Controls.Add(_recurseSubdirectoriesCheckBox);
 
             GroupBox destinationsGroup = new GroupBox();
             destinationsGroup.Text = "Destination folders";
-            destinationsGroup.Location = new Point(16, 380);
-            destinationsGroup.Size = new Size(350, 120);
+            destinationsGroup.Location = new Point(16, 280);
+            destinationsGroup.Size = new Size(350, 220);
             Controls.Add(destinationsGroup);
 
             _destinationListBox = new ListBox();
             _destinationListBox.Location = new Point(14, 28);
-            _destinationListBox.Size = new Size(320, 50);
+            _destinationListBox.Size = new Size(320, 120);
             foreach (string destination in session.DestinationFolders) _destinationListBox.Items.Add(destination);
             destinationsGroup.Controls.Add(_destinationListBox);
 
             Button addDestinationButton = new Button();
             addDestinationButton.Text = "Browse...";
-            addDestinationButton.Location = new Point(36, 84);
+            addDestinationButton.Location = new Point(36, 154);
             addDestinationButton.Click += AddDestinationButton_Click;
             destinationsGroup.Controls.Add(addDestinationButton);
 
             Button removeDestinationButton = new Button();
             removeDestinationButton.Text = "Remove";
-            removeDestinationButton.Location = new Point(128, 84);
+            removeDestinationButton.Location = new Point(128, 154);
             removeDestinationButton.Click += RemoveDestinationButton_Click;
             destinationsGroup.Controls.Add(removeDestinationButton);
 
             GroupBox optionsGroup = new GroupBox();
             optionsGroup.Text = "Session options";
             optionsGroup.Location = new Point(384, 50);
-            optionsGroup.Size = new Size(346, 390);
+            optionsGroup.Size = new Size(346, 450);
             Controls.Add(optionsGroup);
 
             Label actionsHintLabel = new Label();
@@ -128,18 +129,25 @@ namespace PictureOrganizer
             _showFileNameCheckBox.Checked = session.ShowFileName;
             optionsGroup.Controls.Add(_showFileNameCheckBox);
 
+            _showActionsInInfoPanelCheckBox = new CheckBox();
+            _showActionsInInfoPanelCheckBox.AutoSize = true;
+            _showActionsInInfoPanelCheckBox.Location = new Point(14, 220);
+            _showActionsInInfoPanelCheckBox.Text = "Show actions in info panel";
+            _showActionsInInfoPanelCheckBox.Checked = session.ShowActionsInInfoPanel;
+            optionsGroup.Controls.Add(_showActionsInInfoPanelCheckBox);
+
             _highlightDateDifferencesCheckBox = new CheckBox();
             _highlightDateDifferencesCheckBox.AutoSize = true;
-            _highlightDateDifferencesCheckBox.Location = new Point(14, 220);
+            _highlightDateDifferencesCheckBox.Location = new Point(14, 244);
             _highlightDateDifferencesCheckBox.Text = "Highlight date differences";
             _highlightDateDifferencesCheckBox.Checked = session.HighlightDateDifferences;
             optionsGroup.Controls.Add(_highlightDateDifferencesCheckBox);
 
-            optionsGroup.Controls.Add(CreateLabel("Sort order", 14, 252));
+            optionsGroup.Controls.Add(CreateLabel("Sort order", 14, 276));
             _sortOrderComboBox = new ComboBox();
             _sortOrderComboBox.FormattingEnabled = true;
             _sortOrderComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _sortOrderComboBox.Location = new Point(14, 276);
+            _sortOrderComboBox.Location = new Point(14, 300);
             _sortOrderComboBox.Size = new Size(312, 23);
             foreach (SessionSortOrder sortOrder in SessionSortCatalog.GetAll()) _sortOrderComboBox.Items.Add(sortOrder);
             _sortOrderComboBox.Format += SortOrderComboBox_Format;
@@ -147,20 +155,20 @@ namespace PictureOrganizer
             optionsGroup.Controls.Add(_sortOrderComboBox);
 
             Label sourceHintLabel = new Label();
-            sourceHintLabel.Location = new Point(14, 316);
-            sourceHintLabel.Size = new Size(312, 50);
+            sourceHintLabel.Location = new Point(14, 340);
+            sourceHintLabel.Size = new Size(312, 80);
             sourceHintLabel.Text = "Add one or more source folders. Photos from every configured source folder appear together in the grid.";
             optionsGroup.Controls.Add(sourceHintLabel);
 
             Button okButton = new Button();
             okButton.Text = "Save";
-            okButton.Location = new Point(548, 470);
+            okButton.Location = new Point(548, 520);
             okButton.DialogResult = DialogResult.OK;
             Controls.Add(okButton);
 
             Button cancelButton = new Button();
             cancelButton.Text = "Cancel";
-            cancelButton.Location = new Point(629, 470);
+            cancelButton.Location = new Point(629, 520);
             cancelButton.DialogResult = DialogResult.Cancel;
             Controls.Add(cancelButton);
 
@@ -182,6 +190,7 @@ namespace PictureOrganizer
                     DestinationFolders = _destinationListBox.Items.Cast<string>().ToList(),
                     VisibleActions = _actionsCheckedListBox.CheckedItems.Cast<SessionActionType>().ToList(),
                     ShowFileName = _showFileNameCheckBox.Checked,
+                    ShowActionsInInfoPanel = _showActionsInInfoPanelCheckBox.Checked,
                     HighlightDateDifferences = _highlightDateDifferencesCheckBox.Checked,
                     ThumbnailSize = _initialThumbnailSize <= 0 ? 150 : _initialThumbnailSize,
                     SortOrder = _sortOrderComboBox.SelectedItem is SessionSortOrder ? (SessionSortOrder)_sortOrderComboBox.SelectedItem : SessionSortOrder.FileNameAscending,

@@ -127,9 +127,9 @@ public static class ExeVersionStamp
         var values = new Dictionary<string, string>
         {
             { "FileDescription", "Photo Organizer Application" },
-            { "FileVersion", "1.0.0.0" },
+            { "FileVersion", "1.0.1.0" },
             { "ProductName", "Canup Photo Organizer" },
-            { "ProductVersion", "1.0" },
+            { "ProductVersion", "1.0.1" },
             { "LegalCopyright", "Copyright (C) 2026 Mark Canup" }
         };
 

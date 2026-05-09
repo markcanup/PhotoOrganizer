@@ -16,8 +16,8 @@ namespace PictureOrganizer
         private readonly SplitContainer _mainSplitContainer;
         private readonly Panel _detailPanel;
         private readonly Label _sessionNameValueLabel;
-        private readonly Label _sourceValueLabel;
-        private readonly Label _destinationsValueLabel;
+        private readonly TextBox _sourceValueTextBox;
+        private readonly TextBox _destinationsValueTextBox;
         private readonly Label _gridCountValueLabel;
         private readonly Label _lastActionValueLabel;
         private readonly Button _saveSessionButton;
@@ -28,6 +28,8 @@ namespace PictureOrganizer
         private readonly Label _selectionCountValueLabel;
         private readonly Panel _singleSelectionPanel;
         private readonly ListBox _multiSelectionListBox;
+        private readonly ToolStrip _actionsToolStrip;
+        private readonly Panel _actionsPanel;
         private readonly Label _fileNameValueLabel;
         private readonly Label _folderValueLabel;
         private readonly Label _formatValueLabel;
@@ -37,9 +39,11 @@ namespace PictureOrganizer
         private readonly Label _ratingValueLabel;
         private readonly Label _dimensionsValueLabel;
         private readonly Label _instructionsLabel;
+        private readonly FlowLayoutPanel _detailFlow;
         private OrganizerSession _currentSession;
         private AppConfig _appConfig;
         private bool _sessionDirty;
+        private bool _suppressSessionDirtyTracking;
         private bool _startupLoadPending;
         private CancellationTokenSource _loadCancellationSource;
         private int _loadSequence;
@@ -81,15 +85,15 @@ namespace PictureOrganizer
             _grid.DeleteRequested += Grid_DeleteRequested;
             gridBorder.Controls.Add(_grid);
 
-            FlowLayoutPanel flow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-            _detailPanel.Controls.Add(flow);
-            flow.Controls.Add(CreateHeaderPair("Current session:", out _sessionNameValueLabel));
-            flow.Controls.Add(CreateHeaderPair("Source:", out _sourceValueLabel));
-            flow.Controls.Add(CreateHeaderPair("Destinations:", out _destinationsValueLabel, 82));
-            flow.Controls.Add(CreateHeaderPair("Images in grid:", out _gridCountValueLabel));
-            flow.Controls.Add(CreateHeaderPair("Last action:", out _lastActionValueLabel));
+            _detailFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+            _detailPanel.Controls.Add(_detailFlow);
+            _detailFlow.Controls.Add(CreateHeaderPair("Current session:", out _sessionNameValueLabel));
+            _detailFlow.Controls.Add(CreateTextBoxPair("Source(s):", out _sourceValueTextBox, 94));
+            _detailFlow.Controls.Add(CreateTextBoxPair("Destination(s):", out _destinationsValueTextBox, 94));
+            _detailFlow.Controls.Add(CreateHeaderPair("Images in grid:", out _gridCountValueLabel));
+            _detailFlow.Controls.Add(CreateHeaderPair("Last action:", out _lastActionValueLabel));
             _loadingProgressBar = new ProgressBar { Width = 320, Height = 18, Visible = false, Margin = new Padding(0, 0, 0, 8) };
-            flow.Controls.Add(_loadingProgressBar);
+            _detailFlow.Controls.Add(_loadingProgressBar);
 
             FlowLayoutPanel buttonRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 8, 0, 6) };
             _saveSessionButton = new Button { Text = "Save Session", Size = new Size(100, 32) };
@@ -104,9 +108,9 @@ namespace PictureOrganizer
             buttonRow.Controls.Add(_editSessionButton);
             buttonRow.Controls.Add(_refreshButton);
             buttonRow.Controls.Add(_cancelLoadButton);
-            flow.Controls.Add(buttonRow);
-            flow.Controls.Add(CreateDivider());
-            flow.Controls.Add(CreateHeaderPair("Images selected:", out _selectionCountValueLabel));
+            _detailFlow.Controls.Add(buttonRow);
+            _detailFlow.Controls.Add(CreateDivider());
+            _detailFlow.Controls.Add(CreateHeaderPair("Images selected:", out _selectionCountValueLabel));
 
             _singleSelectionPanel = new Panel { AutoSize = true, Margin = new Padding(0, 6, 0, 0), Size = new Size(320, 340) };
             _singleSelectionPanel.Controls.Add(CreateValueRow("Filename:", 0, out _fileNameValueLabel));
@@ -117,13 +121,30 @@ namespace PictureOrganizer
             _singleSelectionPanel.Controls.Add(CreateValueRow("EXIF date taken:", 210, out _exifDateValueLabel));
             _singleSelectionPanel.Controls.Add(CreateValueRow("Rating:", 252, out _ratingValueLabel));
             _singleSelectionPanel.Controls.Add(CreateValueRow("Image dimensions:", 294, out _dimensionsValueLabel));
-            flow.Controls.Add(_singleSelectionPanel);
+            _detailFlow.Controls.Add(_singleSelectionPanel);
 
             _multiSelectionListBox = new ListBox { Width = 320, Height = 96, Margin = new Padding(0, 8, 0, 0), Visible = false };
-            flow.Controls.Add(_multiSelectionListBox);
-            flow.Controls.Add(CreateDivider());
+            _detailFlow.Controls.Add(_multiSelectionListBox);
+
+            _actionsPanel = new Panel { Width = 320, Height = 80, Margin = new Padding(0, 8, 0, 0), Visible = false };
+            _actionsPanel.Controls.Add(new Label { AutoSize = true, Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold), Location = new Point(0, 0), Text = "Actions:" });
+            _actionsToolStrip = new ToolStrip
+            {
+                Dock = DockStyle.None,
+                Location = new Point(0, 22),
+                GripStyle = ToolStripGripStyle.Hidden,
+                LayoutStyle = ToolStripLayoutStyle.VerticalStackWithOverflow,
+                AutoSize = false,
+                Width = 320,
+                Height = 54,
+                ShowItemToolTips = true
+            };
+            _actionsPanel.Controls.Add(_actionsToolStrip);
+            _detailFlow.Controls.Add(_actionsPanel);
+
+            _detailFlow.Controls.Add(CreateDivider());
             _instructionsLabel = new Label { AutoSize = false, Width = 320, Height = 160 };
-            flow.Controls.Add(_instructionsLabel);
+            _detailFlow.Controls.Add(_instructionsLabel);
 
             FormClosing += MainForm_FormClosing;
             Shown += MainForm_Shown;
@@ -343,6 +364,16 @@ namespace PictureOrganizer
 
         private void Grid_ThumbnailSizeChanged(object sender, EventArgs e)
         {
+            if (_suppressSessionDirtyTracking || _currentSession == null)
+            {
+                return;
+            }
+
+            if (_currentSession.ThumbnailSize == _grid.ThumbnailSize)
+            {
+                return;
+            }
+
             _currentSession.ThumbnailSize = _grid.ThumbnailSize;
             _sessionDirty = true;
             RefreshSessionSummary();
@@ -475,6 +506,78 @@ namespace PictureOrganizer
                 }
             }
             return menu;
+        }
+
+        private void RebuildActionsInfoPanel()
+        {
+            _actionsToolStrip.Items.Clear();
+            _actionsPanel.Visible = _currentSession != null && _currentSession.ShowActionsInInfoPanel;
+            if (!_actionsPanel.Visible)
+            {
+                UpdateDetailLayout();
+                return;
+            }
+
+            if (_grid.SelectedCount == 0)
+            {
+                ToolStripLabel placeholder = new ToolStripLabel("Select one or more images to show actions.");
+                placeholder.AutoSize = false;
+                placeholder.Width = Math.Max(180, _actionsToolStrip.Width - 8);
+                _actionsToolStrip.Items.Add(placeholder);
+                UpdateDetailLayout();
+                return;
+            }
+
+            ContextMenuStrip menu = BuildContextMenu();
+            foreach (ToolStripMenuItem item in menu.Items.OfType<ToolStripMenuItem>())
+            {
+                _actionsToolStrip.Items.Add(CreateToolStripActionItem(item));
+            }
+            UpdateDetailLayout();
+        }
+
+        private ToolStripItem CreateToolStripActionItem(ToolStripMenuItem sourceItem)
+        {
+            if (sourceItem.DropDownItems.Count > 0)
+            {
+                ToolStripDropDownButton button = new ToolStripDropDownButton(sourceItem.Text, sourceItem.Image);
+                button.Enabled = sourceItem.Enabled;
+                button.AutoSize = false;
+                button.Width = Math.Max(180, _actionsToolStrip.Width - 8);
+                foreach (ToolStripMenuItem child in sourceItem.DropDownItems.OfType<ToolStripMenuItem>())
+                {
+                    button.DropDownItems.Add(CreateClonedMenuItem(child));
+                }
+
+                return button;
+            }
+
+            ToolStripButton actionButton = new ToolStripButton(sourceItem.Text, sourceItem.Image);
+            actionButton.Enabled = sourceItem.Enabled;
+            actionButton.AutoSize = false;
+            actionButton.Width = Math.Max(180, _actionsToolStrip.Width - 8);
+            actionButton.TextAlign = ContentAlignment.MiddleLeft;
+            actionButton.Click += delegate { sourceItem.PerformClick(); };
+            return actionButton;
+        }
+
+        private ToolStripMenuItem CreateClonedMenuItem(ToolStripMenuItem sourceItem)
+        {
+            ToolStripMenuItem clone = new ToolStripMenuItem(sourceItem.Text, sourceItem.Image);
+            clone.Enabled = sourceItem.Enabled;
+            if (sourceItem.DropDownItems.Count > 0)
+            {
+                foreach (ToolStripMenuItem child in sourceItem.DropDownItems.OfType<ToolStripMenuItem>())
+                {
+                    clone.DropDownItems.Add(CreateClonedMenuItem(child));
+                }
+            }
+            else
+            {
+                clone.Click += delegate { sourceItem.PerformClick(); };
+            }
+
+            return clone;
         }
 
         private ToolStripMenuItem BuildDestinationMenu(string label, IEnumerable<string> destinations, Action<string> action)
@@ -646,8 +749,9 @@ namespace PictureOrganizer
         {
             _sessionNameValueLabel.Text = (string.IsNullOrWhiteSpace(_currentSession.Name) ? "New session" : _currentSession.Name) + (_sessionDirty ? " *" : string.Empty);
             List<string> sourceFolders = _currentSession.GetSourceFolders();
-            _sourceValueLabel.Text = sourceFolders.Count == 0 ? "Not set" : string.Join(Environment.NewLine, sourceFolders.ToArray());
-            _destinationsValueLabel.Text = _currentSession.DestinationFolders.Count == 0 ? "None" : string.Join(Environment.NewLine, _currentSession.DestinationFolders.ToArray());
+            _sourceValueTextBox.Text = sourceFolders.Count == 0 ? "Not set" : string.Join(Environment.NewLine, sourceFolders.ToArray());
+            _destinationsValueTextBox.Text = _currentSession.DestinationFolders.Count == 0 ? "None" : string.Join(Environment.NewLine, _currentSession.DestinationFolders.ToArray());
+            RebuildActionsInfoPanel();
         }
 
         private async void RefreshPhotos()
@@ -840,15 +944,25 @@ namespace PictureOrganizer
         private void SetStatus(string message)
         {
             _lastActionValueLabel.Text = message;
-            _instructionsLabel.Text = "Selection\r\nCtrl-click toggles photos.\r\nShift-click selects a range.\r\nDouble-click opens fullscreen.\r\nRight-click opens the action menu.\r\nDrag a thumbnail edge to resize all thumbnails.";
+            _instructionsLabel.Text = "Selection\r\nCtrl-click toggles photos.\r\nShift-click selects a range.\r\nDouble-click opens fullscreen.\r\nRight-click opens the action menu.\r\nDrag a thumbnail edge to resize all thumbnails.\r\nUse the pane divider to resize the info panel.";
         }
 
         private void ApplySessionDisplaySettings()
         {
-            _grid.ThumbnailSize = _currentSession.ThumbnailSize;
-            _grid.ShowFileName = _currentSession.ShowFileName;
-            _grid.HighlightDateDifferences = _currentSession.HighlightDateDifferences;
-            ApplySplitRatioFromSession();
+            bool previousSuppression = _suppressSessionDirtyTracking;
+            _suppressSessionDirtyTracking = true;
+            try
+            {
+                _grid.ThumbnailSize = _currentSession.ThumbnailSize;
+                _grid.ShowFileName = _currentSession.ShowFileName;
+                _grid.HighlightDateDifferences = _currentSession.HighlightDateDifferences;
+                ApplySplitRatioFromSession();
+                RebuildActionsInfoPanel();
+            }
+            finally
+            {
+                _suppressSessionDirtyTracking = previousSuppression;
+            }
         }
 
         private void UpdateSelectionDetails()
@@ -870,6 +984,7 @@ namespace PictureOrganizer
                 _exifDateValueLabel.Text = !item.MetadataLoaded ? "Loading..." : item.IsPdf ? item.PageCount + " page(s)" : item.ExifDateTaken.HasValue ? item.ExifDateTaken.Value.ToString("yyyy-MM-dd hh:mm:ss tt") : "Not available";
                 _ratingValueLabel.Text = item.IsPdf ? string.Empty : !item.MetadataLoaded ? "Loading..." : !PhotoMetadataHelper.SupportsShellRating(item.FilePath) ? "Not supported" : item.Rating.HasValue ? item.Rating.Value + " star(s)" : "Not rated";
                 _dimensionsValueLabel.Text = !item.MetadataLoaded ? "Loading..." : item.PixelSize.Width + " x " + item.PixelSize.Height;
+                RebuildActionsInfoPanel();
                 return;
             }
             ClearSingleSelectionDetails();
@@ -878,10 +993,12 @@ namespace PictureOrganizer
                 _singleSelectionPanel.Visible = false;
                 _multiSelectionListBox.Visible = true;
                 foreach (PhotoItem item in selected) _multiSelectionListBox.Items.Add(item.DisplayName);
+                RebuildActionsInfoPanel();
                 return;
             }
             _singleSelectionPanel.Visible = false;
             _multiSelectionListBox.Visible = false;
+            RebuildActionsInfoPanel();
         }
 
         private List<PhotoItem> GetSelectedItems()
@@ -1595,6 +1712,24 @@ namespace PictureOrganizer
             return panel;
         }
 
+        private Control CreateTextBoxPair(string title, out TextBox valueTextBox, int height)
+        {
+            Panel panel = new Panel { Width = 320, Height = height, Margin = new Padding(0, 0, 0, 6) };
+            Label titleLabel = new Label { AutoSize = true, Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold), Location = new Point(0, 0), Text = title };
+            valueTextBox = new TextBox
+            {
+                Location = new Point(0, 22),
+                Size = new Size(320, height - 22),
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            panel.Controls.Add(titleLabel);
+            panel.Controls.Add(valueTextBox);
+            return panel;
+        }
+
         private Control CreateDivider() { return new Panel { BackColor = Color.Silver, Width = 320, Height = 1, Margin = new Padding(0, 8, 0, 8) }; }
 
         private Control CreateValueRow(string title, int top, out Label valueLabel)
@@ -1616,15 +1751,12 @@ namespace PictureOrganizer
         private void UpdateDetailLayout()
         {
             int width = Math.Max(220, _detailPanel.ClientSize.Width - 24);
-            foreach (Control directChild in _detailPanel.Controls)
+            foreach (Control child in _detailFlow.Controls)
             {
-                FlowLayoutPanel flow = directChild as FlowLayoutPanel;
-                if (flow == null) continue;
-                foreach (Control child in flow.Controls)
+                child.Width = width;
+                Panel panel = child as Panel;
+                if (panel != null)
                 {
-                    child.Width = width;
-                    Panel panel = child as Panel;
-                    if (panel == null) continue;
                     foreach (Control nested in panel.Controls)
                     {
                         Label label = nested as Label;
@@ -1635,6 +1767,18 @@ namespace PictureOrganizer
                             if (label.Height != measured.Height + 4)
                             {
                                 label.Height = measured.Height + 4;
+                            }
+                        }
+
+                        TextBox textBox = nested as TextBox;
+                        if (textBox != null)
+                        {
+                            textBox.Width = width;
+                            int lineCount = Math.Max(3, textBox.Lines.Length);
+                            int preferredHeight = Math.Min(180, Math.Max(72, 24 + (lineCount * textBox.Font.Height)));
+                            if (textBox.Height != preferredHeight)
+                            {
+                                textBox.Height = preferredHeight;
                             }
                         }
                     }
@@ -1649,6 +1793,20 @@ namespace PictureOrganizer
                     {
                         panel.Height = bottom + 4;
                     }
+                }
+
+                if (ReferenceEquals(child, _actionsPanel))
+                {
+                    _actionsToolStrip.Width = width;
+                    foreach (ToolStripItem item in _actionsToolStrip.Items)
+                    {
+                        item.AutoSize = false;
+                        item.Width = Math.Max(180, width - 8);
+                    }
+
+                    int itemsHeight = Math.Max(30, _actionsToolStrip.Items.Count * 28);
+                    _actionsToolStrip.Height = Math.Min(180, itemsHeight);
+                    _actionsPanel.Height = _actionsToolStrip.Bottom + 4;
                 }
             }
         }
@@ -1665,7 +1823,7 @@ namespace PictureOrganizer
             panel2Width = Math.Max(1, Math.Min((int)Math.Round(totalWidth * 0.50), panel2Width));
             int splitterDistance = Math.Max((int)Math.Round(totalWidth * 0.50), totalWidth - panel2Width);
             splitterDistance = Math.Min(totalWidth - 1, splitterDistance);
-            if (splitterDistance > 0 && splitterDistance < totalWidth)
+            if (splitterDistance > 0 && splitterDistance < totalWidth && _mainSplitContainer.SplitterDistance != splitterDistance)
             {
                 _mainSplitContainer.SplitterDistance = splitterDistance;
             }
@@ -1673,7 +1831,7 @@ namespace PictureOrganizer
 
         private void SaveCurrentSplitRatio()
         {
-            if (_currentSession == null || _mainSplitContainer == null || _mainSplitContainer.ClientSize.Width <= 0)
+            if (_suppressSessionDirtyTracking || _currentSession == null || _mainSplitContainer == null || _mainSplitContainer.ClientSize.Width <= 0)
             {
                 return;
             }
@@ -1681,7 +1839,13 @@ namespace PictureOrganizer
             int totalWidth = Math.Max(1, _mainSplitContainer.ClientSize.Width);
             int panel2Width = totalWidth - _mainSplitContainer.SplitterDistance;
             int percent = (int)Math.Round((panel2Width * 100d) / totalWidth);
-            _currentSession.InfoPanePercent = Math.Max(1, Math.Min(50, percent));
+            int normalizedPercent = Math.Max(1, Math.Min(50, percent));
+            if (_currentSession.InfoPanePercent == normalizedPercent)
+            {
+                return;
+            }
+
+            _currentSession.InfoPanePercent = normalizedPercent;
             _sessionDirty = true;
             RefreshSessionSummary();
         }

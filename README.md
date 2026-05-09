@@ -5,7 +5,7 @@ Canup Photo Organizer is a WinForms desktop application for reviewing, organizin
 The application supports:
 
 - Session-based configuration stored in `C:\ProgramData\PhotoOrganizer\PhotoOrganizer.config`
-- Per-session source folder, destination folders, visible actions, thumbnail size, sort order, recurse-subdirectories option, info-pane width, filename display, and date-difference highlighting
+- Per-session source folders, destination folders, visible actions, thumbnail size, sort order, recurse-subdirectories option, info-pane width, filename display, date-difference highlighting, and optional action display in the info pane
 - Supported source types: `JPG`, `JPEG`, `PNG`, `GIF`, `TIFF`, `TIF`, `HEIC`, `HEIF`, and `PDF`
 - Recursive or top-level file loading, depending on session settings
 - Square thumbnail grid with selection, keyboard navigation, thumbnail resizing, fullscreen view, and side-by-side compare view
@@ -31,6 +31,8 @@ The application supports:
 
 ## Build
 
+Required runtime/build target: `.NET Framework 4.0` (`CLR v4.0.30319`)
+
 Run:
 
 ```powershell
@@ -39,7 +41,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 
 Output:
 
-- `bin\PictureOrganizer.exe`
+- `bin\PhotoOrganizer.exe`
 
 The build currently uses the .NET Framework C# compiler directly and stamps Windows file-version metadata after compilation.
 

@@ -72,6 +72,9 @@ namespace PictureOrganizer
         [DataMember]
         public bool HighlightDateDifferences { get; set; }
 
+        [DataMember]
+        public bool ShowActionsInInfoPanel { get; set; }
+
         public OrganizerSession()
         {
             Name = string.Empty;
@@ -86,6 +89,7 @@ namespace PictureOrganizer
             InfoPanePercent = 25;
             RecurseSubdirectories = false;
             HighlightDateDifferences = false;
+            ShowActionsInInfoPanel = false;
         }
 
         public OrganizerSession Clone()
@@ -103,7 +107,8 @@ namespace PictureOrganizer
                 SortOrder = SortOrder,
                 InfoPanePercent = InfoPanePercent,
                 RecurseSubdirectories = RecurseSubdirectories,
-                HighlightDateDifferences = HighlightDateDifferences
+                HighlightDateDifferences = HighlightDateDifferences,
+                ShowActionsInInfoPanel = ShowActionsInInfoPanel
             };
         }
 

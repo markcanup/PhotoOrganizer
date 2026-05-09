@@ -2,7 +2,7 @@
 
 ## Overview
 
-Canup Photo Organizer is a .NET Framework WinForms application that helps users review and organize photo collections with session-based settings and undoable write actions.
+Canup Photo Organizer is a .NET Framework 4.0 WinForms application that helps users review and organize photo collections with session-based settings and undoable write actions.
 
 ## Architecture
 
@@ -35,7 +35,7 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 
 Output:
 
-- `bin\PictureOrganizer.exe`
+- `bin\PhotoOrganizer.exe`
 
 The script compiles directly with `csc.exe` and then stamps EXE version-resource metadata.
 
@@ -50,11 +50,12 @@ The script compiles directly with `csc.exe` and then stamps EXE version-resource
 Current session settings include:
 
 - session name and session ID
-- source folder
+- source folders
 - destination folders
 - visible actions
 - thumbnail size
 - filename display toggle
+- show-actions-in-info-panel toggle
 - recurse-subdirectories toggle
 - highlight-date-differences toggle
 - sort order
@@ -132,12 +133,14 @@ The compare viewer displays:
 The compiled EXE should expose these Windows file properties:
 
 - File description: `Photo Organizer Application`
-- File version: `1.0.0.0`
+- File version: `1.0.1.0`
 - Product name: `Canup Photo Organizer`
-- Product version: `1.0`
+- Product version: `1.0.1`
 - Copyright: `Copyright (C) 2026 Mark Canup`
 
 These are stamped in the build pipeline, not only in managed assembly attributes.
+
+Increment the version metadata on each new build-oriented release so the EXE version always moves forward.
 
 ## Recommended Maintenance Practices
 

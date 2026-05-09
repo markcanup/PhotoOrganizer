@@ -14,6 +14,7 @@ This project is a Windows Forms desktop application for organizing image files b
 - Mutating file actions live in `src/ImageFileOperations.cs`.
 - Undoable change logging is modeled in `src/ChangeLogModels.cs` and persisted by `src/ChangeLogStore.cs`.
 - Undo UI is in `src/UndoLogForm.cs`.
+- The embedded end-user help window is in `src/HelpViewerForm.cs`.
 
 ## Persistence Model
 
@@ -68,8 +69,15 @@ powershell -ExecutionPolicy Bypass -File .\build.ps1
 The build script:
 
 - compiles with the .NET Framework compiler
+- targets `.NET Framework 4.0` (`CLR v4.0.30319`)
 - references `Microsoft.VisualBasic.dll` for recycle-bin support
 - stamps the EXE with Windows version metadata
+- writes the final app to `bin\PhotoOrganizer.exe`
+
+Versioning rule:
+
+- Increment the EXE version on every new build-oriented change.
+- Keep `src/AssemblyInfo.cs` and the stamped values in `build.ps1` in sync.
 
 ## Safe Change Strategy
 

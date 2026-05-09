@@ -41,16 +41,19 @@ namespace PictureOrganizer
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MinimizeBox = false;
             MaximizeBox = false;
-            ClientSize = new Size(540, 300);
+            ClientSize = new Size(540, 380);
 
             Label messageLabel = new Label();
             messageLabel.Location = new Point(16, 16);
-            messageLabel.Size = new Size(500, 50);
+            messageLabel.AutoSize = false;
+            messageLabel.Size = new Size(500, 110);
             messageLabel.Text = "A file with this name already exists in the destination folder.\r\nSource: " + Path.GetFileName(sourcePath) + "\r\nDestination: " + destinationPath;
+            Size measuredMessage = TextRenderer.MeasureText(messageLabel.Text + " ", messageLabel.Font, new Size(messageLabel.Width, 0), TextFormatFlags.WordBreak);
+            messageLabel.Height = Math.Max(110, measuredMessage.Height + 8);
 
             GroupBox resolutionGroup = new GroupBox();
             resolutionGroup.Text = "Resolution approach";
-            resolutionGroup.Location = new Point(16, 82);
+            resolutionGroup.Location = new Point(16, messageLabel.Bottom + 12);
             resolutionGroup.Size = new Size(240, 122);
 
             _renameRadioButton = new RadioButton();
@@ -75,7 +78,7 @@ namespace PictureOrganizer
 
             GroupBox nextGroup = new GroupBox();
             nextGroup.Text = "What to do next";
-            nextGroup.Location = new Point(276, 82);
+            nextGroup.Location = new Point(276, messageLabel.Bottom + 12);
             nextGroup.Size = new Size(240, 122);
 
             _askEachRadioButton = new RadioButton();
@@ -99,18 +102,18 @@ namespace PictureOrganizer
             nextGroup.Controls.Add(_cancelRadioButton);
 
             Label noteLabel = new Label();
-            noteLabel.Location = new Point(16, 214);
+            noteLabel.Location = new Point(16, resolutionGroup.Bottom + 10);
             noteLabel.Size = new Size(500, 34);
             noteLabel.Text = "Rename adds a number in parentheses after the base file name until the destination file name is unique.";
 
             Button okButton = new Button();
             okButton.Text = "OK";
-            okButton.Location = new Point(354, 258);
+            okButton.Location = new Point(354, noteLabel.Bottom + 12);
             okButton.DialogResult = DialogResult.OK;
 
             Button cancelButton = new Button();
             cancelButton.Text = "Cancel";
-            cancelButton.Location = new Point(435, 258);
+            cancelButton.Location = new Point(435, noteLabel.Bottom + 12);
             cancelButton.DialogResult = DialogResult.Cancel;
 
             Controls.Add(messageLabel);

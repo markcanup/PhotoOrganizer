@@ -51,6 +51,30 @@
       background: #f5f5f5;
       padding: 1px 4px;
     }
+    .icon {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      text-align: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      border: 1px solid rgba(0,0,0,0.25);
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .view { background: #4682b4; }
+    .copy { background: #2e8b57; }
+    .move { background: #ff8c00; }
+    .date { background: #7b68ee; }
+    .rename { background: #008080; }
+    .convert { background: #c71585; }
+    .autocrop { background: #8b4513; }
+    .rotate { background: #5f9ea0; }
+    .delete { background: #b22222; }
+    .rating { background: #daa520; }
+    .edit { background: #696969; }
   </style>
 </head>
 <body>
@@ -67,7 +91,7 @@
         <li>Any destination folders used by Copy and Move</li>
         <li>Which right-click actions are shown</li>
         <li>Thumbnail size, sort order, and side-pane size</li>
-        <li>Display options such as showing file names and highlighting date differences</li>
+        <li>Display options such as showing file names, showing actions in the info panel, and highlighting date differences</li>
       </ul>
 
       <h2>Getting Started</h2>
@@ -101,6 +125,14 @@
         <li>The Help menu opens this embedded help file.</li>
       </ul>
 
+      <h2>Adjusting Thumbnail Size</h2>
+      <ul>
+        <li>Move the mouse over an edge of a thumbnail cell in the image grid.</li>
+        <li>When the resize cursor appears, click and drag.</li>
+        <li>All thumbnail cells stay square and resize together.</li>
+        <li>The selected thumbnail size is saved with the session.</li>
+      </ul>
+
       <h2>Selection and Navigation</h2>
       <ul>
         <li>Click to select one image.</li>
@@ -126,27 +158,42 @@
       <h2>Actions</h2>
       <p>The right-click menu shows only the actions enabled in the session settings.</p>
       <ul>
-        <li>View: fullscreen for one selected item, compare for two selected items.</li>
-        <li>Copy: copies selected files to a chosen destination folder.</li>
-        <li>Move: moves selected files to a chosen destination folder.</li>
-        <li>Date update: updates EXIF date taken and file modified time when supported.</li>
-        <li>Rename: edits a file name directly or applies a saved rename rule.</li>
-        <li>Convert: creates a JPEG or PNG copy of the selected file.</li>
-        <li>Autocrop: runs the built-in crop logic on supported image files.</li>
-        <li>Rotate: rotates the selected image files.</li>
-        <li>Delete: removes selected files from the source and can use the Recycle Bin when available.</li>
-        <li>Rating: clears or sets a Windows-style image rating for supported files.</li>
-        <li>Edit: opens the selected file in the default external editor.</li>
+        <li><span class="icon view">V</span>View: fullscreen for one selected item, compare for two selected items.</li>
+        <li><span class="icon copy">C</span>Copy: copies selected files to a chosen destination folder.</li>
+        <li><span class="icon move">M</span>Move: moves selected files to a chosen destination folder.</li>
+        <li><span class="icon date">D</span>Date update: updates EXIF date taken and file modified time when supported.</li>
+        <li><span class="icon rename">R</span>Rename: edits a file name directly or applies a saved rename rule.</li>
+        <li><span class="icon convert">F</span>Convert: creates a JPEG or PNG copy of the selected file.</li>
+        <li><span class="icon autocrop">A</span>Autocrop: runs the built-in crop logic on supported image files.</li>
+        <li><span class="icon rotate">O</span>Rotate: rotates the selected image files.</li>
+        <li><span class="icon delete">X</span>Delete: removes selected files from the source and can use the Recycle Bin when available.</li>
+        <li><span class="icon rating">*</span>Rating: clears or sets a Windows-style image rating for supported files.</li>
+        <li><span class="icon edit">E</span>Edit: opens the selected file in the default external editor.</li>
+      </ul>
+
+      <h2>Renaming Rules</h2>
+      <p>Rename rules are shared across sessions and can be managed from the File menu.</p>
+      <ul>
+        <li>Each rule has a user-defined name.</li>
+        <li>Rules can add text to the start or end of a filename.</li>
+        <li>Rules can remove text, substitute text, or replace the full base filename.</li>
+        <li>Renaming changes only the filename without the extension.</li>
+        <li>Supported macros include <span class="path">%date%</span>, <span class="path">%dateh%</span>, <span class="path">%time%</span>, <span class="path">%char##%</span>, and <span class="path">%%</span>.</li>
       </ul>
 
       <h2>Session Options</h2>
       <ul>
         <li>Show file name under thumbnail</li>
+        <li>Show actions in info panel</li>
         <li>Highlight date differences</li>
         <li>Recurse subdirectories of source</li>
         <li>Sort order</li>
         <li>Visible actions</li>
       </ul>
+
+      <div class="note">
+        <strong>Show actions in info panel</strong> adds the same action set that appears in the right-click menu to the information pane below the image details.
+      </div>
 
       <div class="note">
         <strong>Highlight date differences</strong> shows a yellow border on non-selected images when the date in the file name, the file modified date, and the EXIF date taken do not all match by date.
@@ -165,12 +212,14 @@
         <li>Session settings: <span class="path">C:\ProgramData\PhotoOrganizer\PhotoOrganizer.config</span></li>
         <li>Change log: <span class="path">C:\ProgramData\PhotoOrganizer\PhotoOrganizer.changes.ndjson</span></li>
         <li>Undo backup folder: <span class="path">C:\ProgramData\PhotoOrganizer\UndoBackups</span></li>
+        <li>Runtime requirement: <span class="path">.NET Framework 4.0 (CLR v4.0.30319)</span></li>
       </ul>
 
       <h2>Notes</h2>
       <ul>
         <li>JPEG and PNG ratings use the Windows rating property system.</li>
         <li>GIF rating is not supported.</li>
+        <li>On some Windows systems, HEIC and HEIF support requires the HEIF image extensions and related codecs to be installed.</li>
         <li>PDF files use a first-page preview.</li>
       </ul>
     </div>
