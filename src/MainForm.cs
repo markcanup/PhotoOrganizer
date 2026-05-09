@@ -152,6 +152,7 @@ namespace PictureOrganizer
             file.DropDownItems.Add("Exit", null, ExitMenuItem_Click);
             menu.Items.Add(file);
             menu.Items.Add(new ToolStripMenuItem("Undo", null, UndoMenuItem_Click));
+            menu.Items.Add(new ToolStripMenuItem("Help", null, HelpMenuItem_Click));
             return menu;
         }
 
@@ -195,13 +196,17 @@ namespace PictureOrganizer
         {
             OrganizerSession previous = _currentSession.Clone();
             OrganizerSession edited;
-            if (!SessionEditorForm.TryEdit(this, _currentSession, out edited)) return;
-            bool sameSource = string.Equals(edited.SourceFolder, _currentSession.SourceFolder, StringComparison.OrdinalIgnoreCase);
+            string lastBrowsedFolder;
+            if (!SessionEditorForm.TryEdit(this, _currentSession, SessionConfigStore.GetDefaultBrowseFolder(_appConfig, GetPreferredBrowseFolder()), out edited, out lastBrowsedFolder)) return;
+            PersistLastBrowsedFolder(lastBrowsedFolder);
+            bool sameSource = AreSourceFoldersEqual(edited.GetSourceFolders(), _currentSession.GetSourceFolders());
             bool recurseChanged = edited.RecurseSubdirectories != _currentSession.RecurseSubdirectories;
             bool sortChanged = edited.SortOrder != _currentSession.SortOrder;
             bool showFileNameChanged = edited.ShowFileName != _currentSession.ShowFileName;
             bool highlightChanged = edited.HighlightDateDifferences != _currentSession.HighlightDateDifferences;
             edited.ThumbnailSize = _currentSession.ThumbnailSize;
+            edited.InfoPanePercent = _currentSession.InfoPanePercent;
+            edited.SessionId = _currentSession.SessionId;
             _currentSession = edited;
             _sessionDirty = true;
             AppendSessionSettingsLog(previous, edited);
@@ -234,6 +239,7 @@ namespace PictureOrganizer
 
         private void SaveSessionMenuItem_Click(object sender, EventArgs e) { SaveCurrentSession(); }
         private void UndoMenuItem_Click(object sender, EventArgs e) { ShowUndoWindow(); }
+        private void HelpMenuItem_Click(object sender, EventArgs e) { ShowHelpWindow(); }
         private void RenamingRulesMenuItem_Click(object sender, EventArgs e)
         {
             if (RenameRulesManagerForm.ShowManager(this))
@@ -362,9 +368,15 @@ namespace PictureOrganizer
             {
                 switch (action)
                 {
+                    case SessionActionType.View:
                     case SessionActionType.Fullscreen:
-                        ToolStripMenuItem fullscreen = new ToolStripMenuItem("Fullscreen", null, delegate { OpenFullscreen(selectedPaths[0]); }) { Enabled = single };
-                        menu.Items.Add(fullscreen);
+                    case SessionActionType.Compare:
+                        ToolStripMenuItem view = BuildViewMenuItem(selectedPaths, single, containsPdf);
+                        if (!menu.Items.OfType<ToolStripItem>().Any(item => string.Equals(item.Name, "ViewActionItem", StringComparison.Ordinal)))
+                        {
+                            view.Name = "ViewActionItem";
+                            menu.Items.Add(view);
+                        }
                         break;
                     case SessionActionType.Copy:
                         menu.Items.Add(BuildDestinationMenu("Copy", _currentSession.DestinationFolders, delegate(string d)
@@ -399,13 +411,14 @@ namespace PictureOrganizer
                                     });
                                 }
                                 _grid.RemoveItems(result.SourcePathsRemoved);
+                                PromptToDeleteEmptySourceFolders(result.SourcePathsRemoved);
                                 UpdateSelectionDetails();
                                 SetStatus(BuildTransferStatus("Moved", result));
                             }, "Moved.");
                         }));
                         break;
                     case SessionActionType.DateUpdate:
-                        ToolStripMenuItem dateItem = new ToolStripMenuItem("Date update", null, delegate
+                        ToolStripMenuItem dateItem = CreateActionMenuItem(SessionActionType.DateUpdate, "Date update", delegate
                         {
                             DateTime initial = PhotoMetadataHelper.GetBestDate(selectedPaths[0]);
                             DateTime selected;
@@ -427,7 +440,8 @@ namespace PictureOrganizer
                                     }
                                 }, "Updated dates.");
                             }
-                        }) { Enabled = !containsPdf };
+                        });
+                        dateItem.Enabled = !containsPdf;
                         menu.Items.Add(dateItem);
                         break;
                     case SessionActionType.Rename:
@@ -437,27 +451,25 @@ namespace PictureOrganizer
                         menu.Items.Add(BuildConvertMenu(selectedPaths, containsPdf, allJpeg, allPng));
                         break;
                     case SessionActionType.Autocrop:
-                        ToolStripMenuItem crop = new ToolStripMenuItem("Autocrop", null, delegate
+                        ToolStripMenuItem crop = CreateActionMenuItem(SessionActionType.Autocrop, "Autocrop", delegate
                         {
                             ExecuteAction(delegate { ImageFileOperations.AutoCropFiles(selectedPaths); UpdateGridItems(selectedPaths); }, "Autocropped.");
-                        }) { Enabled = !containsPdf };
+                        });
+                        crop.Enabled = !containsPdf;
                         menu.Items.Add(crop);
                         break;
                     case SessionActionType.Rotate:
                         menu.Items.Add(BuildRotateMenu(selectedPaths, containsPdf));
                         break;
                     case SessionActionType.Delete:
-                        menu.Items.Add(new ToolStripMenuItem("Delete", null, delegate { DeleteSelectedItems(); }));
+                        menu.Items.Add(CreateActionMenuItem(SessionActionType.Delete, "Delete", delegate { DeleteSelectedItems(); }));
                         break;
                     case SessionActionType.Rating:
                         menu.Items.Add(BuildRatingMenu(selectedPaths));
                         break;
-                    case SessionActionType.Compare:
-                        ToolStripMenuItem compare = new ToolStripMenuItem("Compare", null, delegate { OpenCompare(selectedPaths); }) { Enabled = selectedPaths.Count == 2 && !containsPdf };
-                        menu.Items.Add(compare);
-                        break;
                     case SessionActionType.Edit:
-                        ToolStripMenuItem edit = new ToolStripMenuItem("Edit", null, delegate { ImageFileOperations.OpenExternalEditor(selectedPaths[0]); }) { Enabled = single };
+                        ToolStripMenuItem edit = CreateActionMenuItem(SessionActionType.Edit, "Edit", delegate { ImageFileOperations.OpenExternalEditor(selectedPaths[0]); });
+                        edit.Enabled = single;
                         menu.Items.Add(edit);
                         break;
                 }
@@ -467,7 +479,7 @@ namespace PictureOrganizer
 
         private ToolStripMenuItem BuildDestinationMenu(string label, IEnumerable<string> destinations, Action<string> action)
         {
-            ToolStripMenuItem menu = new ToolStripMenuItem(label + " ->");
+            ToolStripMenuItem menu = CreateActionMenuItem(string.Equals(label, "Copy", StringComparison.OrdinalIgnoreCase) ? SessionActionType.Copy : SessionActionType.Move, label + " ->", null);
             List<string> available = destinations == null ? new List<string>() : destinations.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (available.Count == 0)
             {
@@ -484,7 +496,7 @@ namespace PictureOrganizer
 
         private ToolStripMenuItem BuildRenameMenu(List<string> selectedPaths, bool single)
         {
-            ToolStripMenuItem menu = new ToolStripMenuItem("Rename ->");
+            ToolStripMenuItem menu = CreateActionMenuItem(SessionActionType.Rename, "Rename ->", null);
             ToolStripMenuItem editItem = new ToolStripMenuItem("Edit", null, delegate
             {
                 string filePath = selectedPaths[0];
@@ -529,7 +541,7 @@ namespace PictureOrganizer
 
         private ToolStripMenuItem BuildConvertMenu(List<string> selectedPaths, bool containsPdf, bool allJpeg, bool allPng)
         {
-            ToolStripMenuItem menu = new ToolStripMenuItem("Convert ->");
+            ToolStripMenuItem menu = CreateActionMenuItem(SessionActionType.Convert, "Convert ->", null);
             ToolStripMenuItem jpeg = new ToolStripMenuItem("JPEG", null, delegate
             {
                 ExecuteAction(delegate
@@ -561,7 +573,8 @@ namespace PictureOrganizer
 
         private ToolStripMenuItem BuildRotateMenu(List<string> selectedPaths, bool containsPdf)
         {
-            ToolStripMenuItem menu = new ToolStripMenuItem("Rotate ->") { Enabled = !containsPdf };
+            ToolStripMenuItem menu = CreateActionMenuItem(SessionActionType.Rotate, "Rotate ->", null);
+            menu.Enabled = !containsPdf;
             menu.DropDownItems.Add(new ToolStripMenuItem("90 degrees clockwise", null, delegate { ExecuteRotate(selectedPaths, RotateFlipType.Rotate90FlipNone, "Rotated " + selectedPaths.Count + " file(s) 90 degrees clockwise."); }));
             menu.DropDownItems.Add(new ToolStripMenuItem("90 degrees counter-clockwise", null, delegate { ExecuteRotate(selectedPaths, RotateFlipType.Rotate270FlipNone, "Rotated " + selectedPaths.Count + " file(s) 90 degrees counter-clockwise."); }));
             menu.DropDownItems.Add(new ToolStripMenuItem("180 degrees", null, delegate { ExecuteRotate(selectedPaths, RotateFlipType.Rotate180FlipNone, "Rotated " + selectedPaths.Count + " file(s) 180 degrees."); }));
@@ -571,7 +584,8 @@ namespace PictureOrganizer
         private ToolStripMenuItem BuildRatingMenu(List<string> selectedPaths)
         {
             bool supported = selectedPaths.Count > 0 && selectedPaths.All(PhotoMetadataHelper.SupportsShellRating);
-            ToolStripMenuItem menu = new ToolStripMenuItem("Rating ->") { Enabled = supported };
+            ToolStripMenuItem menu = CreateActionMenuItem(SessionActionType.Rating, "Rating ->", null);
+            menu.Enabled = supported;
             menu.DropDownItems.Add(new ToolStripMenuItem("Clear", null, delegate { ApplyRating(selectedPaths, null); }));
             for (int rating = 1; rating <= 5; rating++)
             {
@@ -579,6 +593,37 @@ namespace PictureOrganizer
                 menu.DropDownItems.Add(new ToolStripMenuItem(capture + " star" + (capture == 1 ? string.Empty : "s"), null, delegate { ApplyRating(selectedPaths, capture); }));
             }
             return menu;
+        }
+
+        private ToolStripMenuItem BuildViewMenuItem(List<string> selectedPaths, bool single, bool containsPdf)
+        {
+            string label = single ? "Fullscreen" : selectedPaths.Count == 2 ? "Compare" : "View";
+            bool enabled = single || (selectedPaths.Count == 2 && !containsPdf);
+            ToolStripMenuItem menuItem = CreateActionMenuItem(SessionActionType.View, label, delegate
+            {
+                if (single)
+                {
+                    OpenFullscreen(selectedPaths[0]);
+                }
+                else if (selectedPaths.Count == 2 && !containsPdf)
+                {
+                    OpenCompare(selectedPaths);
+                }
+            });
+            menuItem.Enabled = enabled;
+            return menuItem;
+        }
+
+        private ToolStripMenuItem CreateActionMenuItem(SessionActionType actionType, string text, Action action)
+        {
+            ToolStripMenuItem menuItem = new ToolStripMenuItem(text);
+            menuItem.Image = ActionIconCatalog.GetIcon(actionType);
+            if (action != null)
+            {
+                menuItem.Click += delegate { action(); };
+            }
+
+            return menuItem;
         }
 
         private void OpenFullscreen(string selectedPath)
@@ -600,18 +645,20 @@ namespace PictureOrganizer
         private void RefreshSessionSummary()
         {
             _sessionNameValueLabel.Text = (string.IsNullOrWhiteSpace(_currentSession.Name) ? "New session" : _currentSession.Name) + (_sessionDirty ? " *" : string.Empty);
-            _sourceValueLabel.Text = string.IsNullOrWhiteSpace(_currentSession.SourceFolder) ? "Not set" : _currentSession.SourceFolder;
+            List<string> sourceFolders = _currentSession.GetSourceFolders();
+            _sourceValueLabel.Text = sourceFolders.Count == 0 ? "Not set" : string.Join(Environment.NewLine, sourceFolders.ToArray());
             _destinationsValueLabel.Text = _currentSession.DestinationFolders.Count == 0 ? "None" : string.Join(Environment.NewLine, _currentSession.DestinationFolders.ToArray());
         }
 
         private async void RefreshPhotos()
         {
             CancelActiveLoad();
-            if (string.IsNullOrWhiteSpace(_currentSession.SourceFolder) || !Directory.Exists(_currentSession.SourceFolder))
+            List<string> sourceFolders = _currentSession.GetSourceFolders().Where(Directory.Exists).ToList();
+            if (sourceFolders.Count == 0)
             {
                 _grid.SetItems(new PhotoItem[0]);
                 UpdateSelectionDetails();
-                SetStatus("Choose a valid source folder.");
+                SetStatus("Choose at least one valid source folder.");
                 return;
             }
 
@@ -625,7 +672,7 @@ namespace PictureOrganizer
                 BeginProgress(0, "Scanning files...");
                 List<string> filePaths = await Task.Run(delegate
                 {
-                    return ApplySortOrder(EnumerateSupportedFiles(_currentSession.SourceFolder, _currentSession.RecurseSubdirectories, cancellationToken)).ToList();
+                    return ApplySortOrder(EnumerateSupportedFiles(sourceFolders, _currentSession.RecurseSubdirectories, cancellationToken)).ToList();
                 }, cancellationToken);
                 if (!IsCurrentLoad(loadId, cancellationSource)) return;
 
@@ -729,41 +776,50 @@ namespace PictureOrganizer
             return PhotoMetadataHelper.CreatePhotoItem(filePath, 360);
         }
 
-        private IEnumerable<string> EnumerateSupportedFiles(string sourceFolder, bool recurseSubdirectories, CancellationToken cancellationToken)
+        private IEnumerable<string> EnumerateSupportedFiles(IEnumerable<string> sourceFolders, bool recurseSubdirectories, CancellationToken cancellationToken)
         {
-            if (!recurseSubdirectories)
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string sourceFolder in sourceFolders.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                foreach (string filePath in Directory.GetFiles(sourceFolder))
+                if (!Directory.Exists(sourceFolder))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (PhotoMetadataHelper.IsSupportedSourceFile(filePath))
-                    {
-                        yield return filePath;
-                    }
+                    continue;
                 }
 
-                yield break;
-            }
-
-            Stack<string> pending = new Stack<string>();
-            pending.Push(sourceFolder);
-            while (pending.Count > 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                string folder = pending.Pop();
-                foreach (string filePath in Directory.GetFiles(folder))
+                if (!recurseSubdirectories)
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (PhotoMetadataHelper.IsSupportedSourceFile(filePath))
+                    foreach (string filePath in Directory.GetFiles(sourceFolder))
                     {
-                        yield return filePath;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (PhotoMetadataHelper.IsSupportedSourceFile(filePath) && seen.Add(filePath))
+                        {
+                            yield return filePath;
+                        }
                     }
+
+                    continue;
                 }
 
-                foreach (string childFolder in Directory.GetDirectories(folder))
+                Stack<string> pending = new Stack<string>();
+                pending.Push(sourceFolder);
+                while (pending.Count > 0)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    pending.Push(childFolder);
+                    string folder = pending.Pop();
+                    foreach (string filePath in Directory.GetFiles(folder))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (PhotoMetadataHelper.IsSupportedSourceFile(filePath) && seen.Add(filePath))
+                        {
+                            yield return filePath;
+                        }
+                    }
+
+                    foreach (string childFolder in Directory.GetDirectories(folder))
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        pending.Push(childFolder);
+                    }
                 }
             }
         }
@@ -944,6 +1000,7 @@ namespace PictureOrganizer
                     AppendChangeLog(ChangeLogKind.Delete, "Deleted " + Path.GetFileName(path), new DeleteBackupChange { OriginalPath = path, BackupPath = backupPath }, entryId);
                 }
                 _grid.RemoveItems(selectedPaths);
+                PromptToDeleteEmptySourceFolders(selectedPaths);
                 UpdateSelectionDetails();
             }, "Deleted.");
         }
@@ -1022,20 +1079,126 @@ namespace PictureOrganizer
 
         private string GetDestinationMenuDisplayPath(string destinationPath)
         {
-            if (string.IsNullOrWhiteSpace(_currentSession.SourceFolder))
+            foreach (string sourceFolder in _currentSession.GetSourceFolders())
             {
-                return destinationPath;
+                string source = EnsureTrailingSeparator(Path.GetFullPath(sourceFolder));
+                string destination = Path.GetFullPath(destinationPath);
+                if (!destination.StartsWith(source, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string relative = destination.Substring(source.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return relative.Length == 0 ? "." : ".\\" + relative;
             }
 
-            string source = EnsureTrailingSeparator(Path.GetFullPath(_currentSession.SourceFolder));
-            string destination = Path.GetFullPath(destinationPath);
-            if (!destination.StartsWith(source, StringComparison.OrdinalIgnoreCase))
+            return destinationPath;
+        }
+
+        private void ShowHelpWindow()
+        {
+            using (HelpViewerForm helpForm = new HelpViewerForm())
             {
-                return destinationPath;
+                helpForm.ShowDialog(this);
+            }
+        }
+
+        private void PersistLastBrowsedFolder(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
+            {
+                return;
             }
 
-            string relative = destination.Substring(source.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return relative.Length == 0 ? "." : ".\\" + relative;
+            if (string.Equals(_appConfig.LastBrowsedFolder, folderPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _appConfig.LastBrowsedFolder = folderPath;
+            SessionConfigStore.Save(_appConfig);
+            _appConfig = SessionConfigStore.Load();
+        }
+
+        private string GetPreferredBrowseFolder()
+        {
+            string currentSource = _currentSession.GetSourceFolders().FirstOrDefault(Directory.Exists);
+            if (!string.IsNullOrWhiteSpace(currentSource))
+            {
+                return currentSource;
+            }
+
+            string currentDestination = _currentSession.DestinationFolders.FirstOrDefault(Directory.Exists);
+            if (!string.IsNullOrWhiteSpace(currentDestination))
+            {
+                return currentDestination;
+            }
+
+            return _appConfig.LastBrowsedFolder;
+        }
+
+        private static bool AreSourceFoldersEqual(IEnumerable<string> left, IEnumerable<string> right)
+        {
+            List<string> leftList = (left ?? Enumerable.Empty<string>())
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            List<string> rightList = (right ?? Enumerable.Empty<string>())
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return leftList.SequenceEqual(rightList, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void PromptToDeleteEmptySourceFolders(IEnumerable<string> removedFilePaths)
+        {
+            List<string> sourceFolders = _currentSession.GetSourceFolders();
+            List<string> affectedRoots = sourceFolders
+                .Where(root => removedFilePaths.Any(path => IsPathInSourceRoot(path, root)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            foreach (string root in affectedRoots)
+            {
+                if (!Directory.Exists(root))
+                {
+                    continue;
+                }
+
+                bool hasFiles = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Any();
+                if (hasFiles)
+                {
+                    continue;
+                }
+
+                if (MessageBox.Show(this, "The source folder is now empty. Delete it?" + Environment.NewLine + Environment.NewLine + root, "Delete Empty Source Folder", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+                {
+                    continue;
+                }
+
+                OrganizerSession previous = _currentSession.Clone();
+                Directory.Delete(root, true);
+                _currentSession.SourceFolders = _currentSession.GetSourceFolders().Where(path => !string.Equals(path, root, StringComparison.OrdinalIgnoreCase)).ToList();
+                _currentSession.SourceFolder = _currentSession.SourceFolders.FirstOrDefault() ?? string.Empty;
+                _sessionDirty = true;
+                AppendSessionSettingsLog(previous, _currentSession);
+                RefreshSessionSummary();
+                SetStatus("Deleted empty source folder " + root);
+            }
+        }
+
+        private static bool IsPathInSourceRoot(string filePath, string sourceRoot)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || string.IsNullOrWhiteSpace(sourceRoot))
+            {
+                return false;
+            }
+
+            string directory = Path.GetDirectoryName(Path.GetFullPath(filePath)) ?? string.Empty;
+            string root = EnsureTrailingSeparator(Path.GetFullPath(sourceRoot));
+            string fullDirectory = EnsureTrailingSeparator(directory);
+            return fullDirectory.StartsWith(root, StringComparison.OrdinalIgnoreCase);
         }
 
         private void AppendSessionSettingsLog(OrganizerSession previousSession, OrganizerSession updatedSession)
@@ -1310,7 +1473,7 @@ namespace PictureOrganizer
             _appConfig = SessionConfigStore.Load();
             if (string.Equals(_currentSession.SessionId, previous.SessionId, StringComparison.OrdinalIgnoreCase))
             {
-                bool requiresRefresh = !string.Equals(_currentSession.SourceFolder, previous.SourceFolder, StringComparison.OrdinalIgnoreCase)
+                bool requiresRefresh = !AreSourceFoldersEqual(_currentSession.GetSourceFolders(), previous.GetSourceFolders())
                     || _currentSession.RecurseSubdirectories != previous.RecurseSubdirectories;
                 bool highlightChanged = _currentSession.HighlightDateDifferences != previous.HighlightDateDifferences;
                 _currentSession = previous;

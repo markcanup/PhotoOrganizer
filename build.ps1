@@ -28,8 +28,9 @@ $references = @(
 )
 
 $sources = Get-ChildItem -Path $src -Filter *.cs | Sort-Object Name | ForEach-Object { $_.FullName }
+$helpResource = Join-Path $root "docs\PhotoOrganizerHelp.htm"
 
-& $csc /nologo /target:winexe /out:$output $references $sources
+& $csc /nologo /target:winexe /out:$output "/resource:$helpResource,PictureOrganizer.PhotoOrganizerHelp.htm" $references $sources
 if ($LASTEXITCODE -ne 0) {
     throw "Compilation failed."
 }

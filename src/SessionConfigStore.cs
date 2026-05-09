@@ -41,6 +41,11 @@ namespace PictureOrganizer
                         loaded.Ratings = new System.Collections.Generic.List<FileRatingEntry>();
                     }
 
+                    if (loaded.LastBrowsedFolder == null)
+                    {
+                        loaded.LastBrowsedFolder = string.Empty;
+                    }
+
                     NormalizeSessions(loaded);
                     return loaded;
                 }
@@ -75,7 +80,9 @@ namespace PictureOrganizer
 
             AppConfig config = Load();
             OrganizerSession existing = config.Sessions
-                .FirstOrDefault(item => string.Equals(item.Name, session.Name, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(item =>
+                    (!string.IsNullOrWhiteSpace(session.SessionId) && string.Equals(item.SessionId, session.SessionId, StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(item.Name, session.Name, StringComparison.OrdinalIgnoreCase));
 
             if (existing != null)
             {
@@ -99,6 +106,23 @@ namespace PictureOrganizer
                     session.DestinationFolders = new System.Collections.Generic.List<string>();
                 }
 
+                if (session.SourceFolders == null)
+                {
+                    session.SourceFolders = new System.Collections.Generic.List<string>();
+                }
+
+                if (session.SourceFolders.Count == 0 && !string.IsNullOrWhiteSpace(session.SourceFolder))
+                {
+                    session.SourceFolders.Add(session.SourceFolder);
+                }
+
+                session.SourceFolders = session.SourceFolders
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Select(path => path.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                session.SourceFolder = session.SourceFolders.FirstOrDefault() ?? string.Empty;
+
                 if (string.IsNullOrWhiteSpace(session.SessionId))
                 {
                     session.SessionId = Guid.NewGuid().ToString("N");
@@ -106,11 +130,11 @@ namespace PictureOrganizer
 
                 if (session.VisibleActions == null || session.VisibleActions.Count == 0)
                 {
-                    session.VisibleActions = SessionActionCatalog.GetAll().ToList();
+                    session.VisibleActions = SessionActionCatalog.GetDefaultVisibleActions().ToList();
                 }
-                else if (!session.VisibleActions.Contains(SessionActionType.Compare))
+                else
                 {
-                    session.VisibleActions.Add(SessionActionType.Compare);
+                    session.VisibleActions = NormalizeActions(session.VisibleActions);
                 }
 
                 if (session.ThumbnailSize < 80)
@@ -123,6 +147,41 @@ namespace PictureOrganizer
                     session.InfoPanePercent = 25;
                 }
             }
+        }
+
+        private static System.Collections.Generic.List<SessionActionType> NormalizeActions(System.Collections.Generic.IEnumerable<SessionActionType> actions)
+        {
+            System.Collections.Generic.List<SessionActionType> normalized = new System.Collections.Generic.List<SessionActionType>();
+            foreach (SessionActionType action in actions)
+            {
+                SessionActionType mapped = action == SessionActionType.Fullscreen || action == SessionActionType.Compare
+                    ? SessionActionType.View
+                    : action;
+                if (!normalized.Contains(mapped))
+                {
+                    normalized.Add(mapped);
+                }
+            }
+
+            return normalized
+                .Where(action => SessionActionCatalog.GetAll().Contains(action))
+                .ToList();
+        }
+
+        public static string GetDefaultBrowseFolder(AppConfig config, string preferredPath)
+        {
+            if (!string.IsNullOrWhiteSpace(preferredPath) && Directory.Exists(preferredPath))
+            {
+                return preferredPath;
+            }
+
+            if (config != null && !string.IsNullOrWhiteSpace(config.LastBrowsedFolder) && Directory.Exists(config.LastBrowsedFolder))
+            {
+                return config.LastBrowsedFolder;
+            }
+
+            string pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            return Directory.Exists(pictures) ? pictures : Environment.GetFolderPath(Environment.SpecialFolder.Personal);
         }
 
         public static int? GetRating(AppConfig config, string filePath)

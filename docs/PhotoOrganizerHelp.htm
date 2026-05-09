@@ -60,11 +60,21 @@
       <h1>Welcome</h1>
       <p>Canup Photo Organizer helps you review, compare, rename, move, copy, convert, rotate, rate, and organize image files using saved sessions.</p>
 
+      <h2>What Is a Session?</h2>
+      <p>A session is a saved workspace for a photo-organizing job. A session remembers the folders and display settings you want to use so you can return to the same work later.</p>
+      <ul>
+        <li>One or more source folders</li>
+        <li>Any destination folders used by Copy and Move</li>
+        <li>Which right-click actions are shown</li>
+        <li>Thumbnail size, sort order, and side-pane size</li>
+        <li>Display options such as showing file names and highlighting date differences</li>
+      </ul>
+
       <h2>Getting Started</h2>
       <ul>
         <li>Start the application. If no sessions exist yet, the session editor opens automatically.</li>
         <li>Enter a session name.</li>
-        <li>Select a source folder.</li>
+        <li>Add one or more source folders.</li>
         <li>Optionally select destination folders for copy and move actions.</li>
         <li>Choose which right-click actions should be visible.</li>
         <li>Save the session.</li>
@@ -88,6 +98,7 @@
         <li>The divider between them can be resized.</li>
         <li>The File menu contains session commands.</li>
         <li>The Undo menu opens the undo history window.</li>
+        <li>The Help menu opens this embedded help file.</li>
       </ul>
 
       <h2>Selection and Navigation</h2>
@@ -101,13 +112,31 @@
         <li>Delete performs the same action as the Delete command.</li>
       </ul>
 
-      <h2>Compare View</h2>
-      <p>Select exactly two images, then use the Compare action.</p>
+      <h2>View</h2>
+      <p>The View action changes based on the number of selected items.</p>
       <ul>
+        <li>If one item is selected, View opens fullscreen.</li>
+        <li>If two items are selected, View opens compare mode.</li>
         <li>The left image fills the left half of the screen.</li>
         <li>The right image fills the right half of the screen.</li>
         <li>Each image is scaled as large as possible within its half.</li>
         <li>The filename, file size, and image dimensions are shown under each image.</li>
+      </ul>
+
+      <h2>Actions</h2>
+      <p>The right-click menu shows only the actions enabled in the session settings.</p>
+      <ul>
+        <li>View: fullscreen for one selected item, compare for two selected items.</li>
+        <li>Copy: copies selected files to a chosen destination folder.</li>
+        <li>Move: moves selected files to a chosen destination folder.</li>
+        <li>Date update: updates EXIF date taken and file modified time when supported.</li>
+        <li>Rename: edits a file name directly or applies a saved rename rule.</li>
+        <li>Convert: creates a JPEG or PNG copy of the selected file.</li>
+        <li>Autocrop: runs the built-in crop logic on supported image files.</li>
+        <li>Rotate: rotates the selected image files.</li>
+        <li>Delete: removes selected files from the source and can use the Recycle Bin when available.</li>
+        <li>Rating: clears or sets a Windows-style image rating for supported files.</li>
+        <li>Edit: opens the selected file in the default external editor.</li>
       </ul>
 
       <h2>Session Options</h2>

@@ -20,12 +20,16 @@ namespace PictureOrganizer
         [DataMember]
         public List<FileRatingEntry> Ratings { get; set; }
 
+        [DataMember]
+        public string LastBrowsedFolder { get; set; }
+
         public AppConfig()
         {
             Sessions = new List<OrganizerSession>();
             RenameRules = new List<RenameRule>();
             LastSessionName = string.Empty;
             Ratings = new List<FileRatingEntry>();
+            LastBrowsedFolder = string.Empty;
         }
     }
 
@@ -40,6 +44,9 @@ namespace PictureOrganizer
 
         [DataMember]
         public string SourceFolder { get; set; }
+
+        [DataMember]
+        public List<string> SourceFolders { get; set; }
 
         [DataMember]
         public List<string> DestinationFolders { get; set; }
@@ -70,8 +77,9 @@ namespace PictureOrganizer
             Name = string.Empty;
             SessionId = Guid.NewGuid().ToString("N");
             SourceFolder = string.Empty;
+            SourceFolders = new List<string>();
             DestinationFolders = new List<string>();
-            VisibleActions = SessionActionCatalog.GetAll().ToList();
+            VisibleActions = SessionActionCatalog.GetDefaultVisibleActions().ToList();
             ThumbnailSize = 150;
             ShowFileName = false;
             SortOrder = SessionSortOrder.FileNameAscending;
@@ -87,8 +95,9 @@ namespace PictureOrganizer
                 Name = Name,
                 SessionId = SessionId,
                 SourceFolder = SourceFolder,
+                SourceFolders = SourceFolders == null ? new List<string>() : new List<string>(SourceFolders),
                 DestinationFolders = DestinationFolders == null ? new List<string>() : new List<string>(DestinationFolders),
-                VisibleActions = VisibleActions == null ? SessionActionCatalog.GetAll().ToList() : new List<SessionActionType>(VisibleActions),
+                VisibleActions = VisibleActions == null ? SessionActionCatalog.GetDefaultVisibleActions().ToList() : new List<SessionActionType>(VisibleActions),
                 ThumbnailSize = ThumbnailSize,
                 ShowFileName = ShowFileName,
                 SortOrder = SortOrder,
@@ -96,6 +105,21 @@ namespace PictureOrganizer
                 RecurseSubdirectories = RecurseSubdirectories,
                 HighlightDateDifferences = HighlightDateDifferences
             };
+        }
+
+        public List<string> GetSourceFolders()
+        {
+            if (SourceFolders != null && SourceFolders.Count > 0)
+            {
+                return SourceFolders
+                    .Where(path => !string.IsNullOrWhiteSpace(path))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return string.IsNullOrWhiteSpace(SourceFolder)
+                ? new List<string>()
+                : new List<string> { SourceFolder };
         }
     }
 
@@ -182,6 +206,8 @@ namespace PictureOrganizer
     public enum SessionActionType
     {
         [EnumMember]
+        View,
+        [EnumMember]
         Fullscreen,
         [EnumMember]
         Copy,
@@ -213,7 +239,7 @@ namespace PictureOrganizer
         {
             return new[]
             {
-                SessionActionType.Fullscreen,
+                SessionActionType.View,
                 SessionActionType.Copy,
                 SessionActionType.Move,
                 SessionActionType.DateUpdate,
@@ -228,10 +254,23 @@ namespace PictureOrganizer
             };
         }
 
+        public static SessionActionType[] GetDefaultVisibleActions()
+        {
+            return new[]
+            {
+                SessionActionType.View,
+                SessionActionType.Copy,
+                SessionActionType.Move,
+                SessionActionType.Rename,
+                SessionActionType.Delete
+            };
+        }
+
         public static string GetDisplayName(SessionActionType actionType)
         {
             switch (actionType)
             {
+                case SessionActionType.View: return "View";
                 case SessionActionType.Fullscreen: return "Fullscreen";
                 case SessionActionType.Copy: return "Copy";
                 case SessionActionType.Move: return "Move";

@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -8,7 +9,7 @@ namespace PictureOrganizer
     internal sealed class SessionEditorForm : Form
     {
         private readonly TextBox _nameTextBox;
-        private readonly TextBox _sourceFolderTextBox;
+        private readonly ListBox _sourceListBox;
         private readonly ListBox _destinationListBox;
         private readonly CheckedListBox _actionsCheckedListBox;
         private readonly CheckBox _showFileNameCheckBox;
@@ -16,66 +17,90 @@ namespace PictureOrganizer
         private readonly CheckBox _highlightDateDifferencesCheckBox;
         private readonly ComboBox _sortOrderComboBox;
         private readonly int _initialThumbnailSize;
+        private readonly string _sessionId;
+        private readonly int _initialInfoPanePercent;
+        private string _lastBrowsedFolder;
 
-        private SessionEditorForm(OrganizerSession session)
+        private SessionEditorForm(OrganizerSession session, string defaultBrowseFolder)
         {
             _initialThumbnailSize = session.ThumbnailSize;
+            _sessionId = session.SessionId;
+            _initialInfoPanePercent = session.InfoPanePercent;
+            _lastBrowsedFolder = defaultBrowseFolder ?? string.Empty;
+
             Text = "Edit Session";
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MinimizeBox = false;
             MaximizeBox = false;
-            ClientSize = new Size(740, 470);
+            ClientSize = new Size(760, 520);
 
             Controls.Add(CreateLabel("Session name", 16, 18));
-            _nameTextBox = CreateTextBox(session.Name, 120, 14, 590);
+            _nameTextBox = CreateTextBox(session.Name, 120, 14, 610);
             Controls.Add(_nameTextBox);
 
-            Controls.Add(CreateLabel("Source folder", 16, 54));
-            _sourceFolderTextBox = CreateTextBox(session.SourceFolder, 120, 50, 500);
-            Controls.Add(_sourceFolderTextBox);
-            Button browseButton = new Button();
-            browseButton.Text = "Browse...";
-            browseButton.Location = new Point(630, 49);
-            browseButton.Size = new Size(80, 26);
-            browseButton.Click += BrowseButton_Click;
-            Controls.Add(browseButton);
+            GroupBox sourcesGroup = new GroupBox();
+            sourcesGroup.Text = "Source folders";
+            sourcesGroup.Location = new Point(16, 50);
+            sourcesGroup.Size = new Size(350, 320);
+            Controls.Add(sourcesGroup);
+
+            _sourceListBox = new ListBox();
+            _sourceListBox.Location = new Point(14, 28);
+            _sourceListBox.Size = new Size(320, 210);
+            foreach (string source in session.GetSourceFolders())
+            {
+                _sourceListBox.Items.Add(source);
+            }
+            sourcesGroup.Controls.Add(_sourceListBox);
+
+            Button addSourceButton = new Button();
+            addSourceButton.Text = "Browse...";
+            addSourceButton.Location = new Point(36, 248);
+            addSourceButton.Click += AddSourceButton_Click;
+            sourcesGroup.Controls.Add(addSourceButton);
+
+            Button removeSourceButton = new Button();
+            removeSourceButton.Text = "Remove";
+            removeSourceButton.Location = new Point(128, 248);
+            removeSourceButton.Click += RemoveSourceButton_Click;
+            sourcesGroup.Controls.Add(removeSourceButton);
 
             _recurseSubdirectoriesCheckBox = new CheckBox();
             _recurseSubdirectoriesCheckBox.AutoSize = true;
-            _recurseSubdirectoriesCheckBox.Location = new Point(120, 78);
+            _recurseSubdirectoriesCheckBox.Location = new Point(14, 286);
             _recurseSubdirectoriesCheckBox.Text = "Recurse subdirectories of source";
             _recurseSubdirectoriesCheckBox.Checked = session.RecurseSubdirectories;
-            Controls.Add(_recurseSubdirectoriesCheckBox);
+            sourcesGroup.Controls.Add(_recurseSubdirectoriesCheckBox);
 
             GroupBox destinationsGroup = new GroupBox();
             destinationsGroup.Text = "Destination folders";
-            destinationsGroup.Location = new Point(16, 108);
-            destinationsGroup.Size = new Size(330, 289);
+            destinationsGroup.Location = new Point(16, 380);
+            destinationsGroup.Size = new Size(350, 120);
             Controls.Add(destinationsGroup);
 
             _destinationListBox = new ListBox();
             _destinationListBox.Location = new Point(14, 28);
-            _destinationListBox.Size = new Size(300, 210);
+            _destinationListBox.Size = new Size(320, 50);
             foreach (string destination in session.DestinationFolders) _destinationListBox.Items.Add(destination);
             destinationsGroup.Controls.Add(_destinationListBox);
 
             Button addDestinationButton = new Button();
             addDestinationButton.Text = "Browse...";
-            addDestinationButton.Location = new Point(35, 252);
+            addDestinationButton.Location = new Point(36, 84);
             addDestinationButton.Click += AddDestinationButton_Click;
             destinationsGroup.Controls.Add(addDestinationButton);
 
             Button removeDestinationButton = new Button();
             removeDestinationButton.Text = "Remove";
-            removeDestinationButton.Location = new Point(127, 252);
+            removeDestinationButton.Location = new Point(128, 84);
             removeDestinationButton.Click += RemoveDestinationButton_Click;
             destinationsGroup.Controls.Add(removeDestinationButton);
 
             GroupBox optionsGroup = new GroupBox();
             optionsGroup.Text = "Session options";
-            optionsGroup.Location = new Point(364, 108);
-            optionsGroup.Size = new Size(346, 274);
+            optionsGroup.Location = new Point(384, 50);
+            optionsGroup.Size = new Size(346, 390);
             Controls.Add(optionsGroup);
 
             Label actionsHintLabel = new Label();
@@ -86,7 +111,7 @@ namespace PictureOrganizer
 
             _actionsCheckedListBox = new CheckedListBox();
             _actionsCheckedListBox.Location = new Point(14, 58);
-            _actionsCheckedListBox.Size = new Size(312, 94);
+            _actionsCheckedListBox.Size = new Size(312, 124);
             _actionsCheckedListBox.FormattingEnabled = true;
             foreach (SessionActionType action in SessionActionCatalog.GetAll())
             {
@@ -98,38 +123,44 @@ namespace PictureOrganizer
 
             _showFileNameCheckBox = new CheckBox();
             _showFileNameCheckBox.AutoSize = true;
-            _showFileNameCheckBox.Location = new Point(14, 162);
+            _showFileNameCheckBox.Location = new Point(14, 196);
             _showFileNameCheckBox.Text = "Show file name under thumbnail";
             _showFileNameCheckBox.Checked = session.ShowFileName;
             optionsGroup.Controls.Add(_showFileNameCheckBox);
 
             _highlightDateDifferencesCheckBox = new CheckBox();
             _highlightDateDifferencesCheckBox.AutoSize = true;
-            _highlightDateDifferencesCheckBox.Location = new Point(14, 186);
+            _highlightDateDifferencesCheckBox.Location = new Point(14, 220);
             _highlightDateDifferencesCheckBox.Text = "Highlight date differences";
             _highlightDateDifferencesCheckBox.Checked = session.HighlightDateDifferences;
             optionsGroup.Controls.Add(_highlightDateDifferencesCheckBox);
 
-            optionsGroup.Controls.Add(CreateLabel("Sort order", 14, 212));
+            optionsGroup.Controls.Add(CreateLabel("Sort order", 14, 252));
             _sortOrderComboBox = new ComboBox();
             _sortOrderComboBox.FormattingEnabled = true;
             _sortOrderComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _sortOrderComboBox.Location = new Point(14, 234);
+            _sortOrderComboBox.Location = new Point(14, 276);
             _sortOrderComboBox.Size = new Size(312, 23);
             foreach (SessionSortOrder sortOrder in SessionSortCatalog.GetAll()) _sortOrderComboBox.Items.Add(sortOrder);
             _sortOrderComboBox.Format += SortOrderComboBox_Format;
             _sortOrderComboBox.SelectedItem = session.SortOrder;
             optionsGroup.Controls.Add(_sortOrderComboBox);
 
+            Label sourceHintLabel = new Label();
+            sourceHintLabel.Location = new Point(14, 316);
+            sourceHintLabel.Size = new Size(312, 50);
+            sourceHintLabel.Text = "Add one or more source folders. Photos from every configured source folder appear together in the grid.";
+            optionsGroup.Controls.Add(sourceHintLabel);
+
             Button okButton = new Button();
             okButton.Text = "Save";
-            okButton.Location = new Point(548, 424);
+            okButton.Location = new Point(548, 470);
             okButton.DialogResult = DialogResult.OK;
             Controls.Add(okButton);
 
             Button cancelButton = new Button();
             cancelButton.Text = "Cancel";
-            cancelButton.Location = new Point(629, 424);
+            cancelButton.Location = new Point(629, 470);
             cancelButton.DialogResult = DialogResult.Cancel;
             Controls.Add(cancelButton);
 
@@ -141,24 +172,33 @@ namespace PictureOrganizer
         {
             get
             {
+                System.Collections.Generic.List<string> sources = _sourceListBox.Items.Cast<string>().ToList();
                 return new OrganizerSession
                 {
                     Name = _nameTextBox.Text.Trim(),
-                    SourceFolder = _sourceFolderTextBox.Text.Trim(),
+                    SessionId = _sessionId,
+                    SourceFolder = sources.FirstOrDefault() ?? string.Empty,
+                    SourceFolders = sources,
                     DestinationFolders = _destinationListBox.Items.Cast<string>().ToList(),
                     VisibleActions = _actionsCheckedListBox.CheckedItems.Cast<SessionActionType>().ToList(),
                     ShowFileName = _showFileNameCheckBox.Checked,
                     HighlightDateDifferences = _highlightDateDifferencesCheckBox.Checked,
                     ThumbnailSize = _initialThumbnailSize <= 0 ? 150 : _initialThumbnailSize,
                     SortOrder = _sortOrderComboBox.SelectedItem is SessionSortOrder ? (SessionSortOrder)_sortOrderComboBox.SelectedItem : SessionSortOrder.FileNameAscending,
-                    RecurseSubdirectories = _recurseSubdirectoriesCheckBox.Checked
+                    RecurseSubdirectories = _recurseSubdirectoriesCheckBox.Checked,
+                    InfoPanePercent = _initialInfoPanePercent <= 0 ? 25 : _initialInfoPanePercent
                 };
             }
         }
 
-        public static bool TryEdit(IWin32Window owner, OrganizerSession session, out OrganizerSession updatedSession)
+        public string LastBrowsedFolder
         {
-            using (SessionEditorForm form = new SessionEditorForm(session == null ? new OrganizerSession() : session.Clone()))
+            get { return _lastBrowsedFolder; }
+        }
+
+        public static bool TryEdit(IWin32Window owner, OrganizerSession session, string defaultBrowseFolder, out OrganizerSession updatedSession, out string lastBrowsedFolder)
+        {
+            using (SessionEditorForm form = new SessionEditorForm(session == null ? new OrganizerSession() : session.Clone(), defaultBrowseFolder))
             {
                 if (form.ShowDialog(owner) == DialogResult.OK)
                 {
@@ -167,42 +207,91 @@ namespace PictureOrganizer
                     {
                         MessageBox.Show(owner, "Please enter a session name.", "Missing Name", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         updatedSession = null;
+                        lastBrowsedFolder = form.LastBrowsedFolder;
+                        return false;
+                    }
+
+                    if (candidate.SourceFolders.Count == 0)
+                    {
+                        MessageBox.Show(owner, "Please add at least one source folder.", "Missing Source", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        updatedSession = null;
+                        lastBrowsedFolder = form.LastBrowsedFolder;
                         return false;
                     }
 
                     updatedSession = candidate;
+                    lastBrowsedFolder = form.LastBrowsedFolder;
                     return true;
                 }
-            }
 
-            updatedSession = null;
-            return false;
+                updatedSession = null;
+                lastBrowsedFolder = form.LastBrowsedFolder;
+                return false;
+            }
         }
 
-        private void BrowseButton_Click(object sender, EventArgs e)
+        private void AddSourceButton_Click(object sender, EventArgs e)
         {
-            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            string selectedPath;
+            if (TryBrowseFolder("Select a source folder", false, out selectedPath))
             {
-                dialog.Description = "Select the source folder";
-                dialog.ShowNewFolderButton = false;
-                dialog.SelectedPath = _sourceFolderTextBox.Text;
-                if (dialog.ShowDialog(this) == DialogResult.OK) _sourceFolderTextBox.Text = dialog.SelectedPath;
+                AddUniqueItem(_sourceListBox, selectedPath);
+            }
+        }
+
+        private void RemoveSourceButton_Click(object sender, EventArgs e)
+        {
+            if (_sourceListBox.SelectedItem != null)
+            {
+                _sourceListBox.Items.Remove(_sourceListBox.SelectedItem);
             }
         }
 
         private void AddDestinationButton_Click(object sender, EventArgs e)
         {
-            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            string selectedPath;
+            if (TryBrowseFolder("Select a destination folder", true, out selectedPath))
             {
-                dialog.Description = "Select a destination folder";
-                dialog.ShowNewFolderButton = true;
-                if (dialog.ShowDialog(this) == DialogResult.OK && dialog.SelectedPath.Length > 0) _destinationListBox.Items.Add(dialog.SelectedPath);
+                AddUniqueItem(_destinationListBox, selectedPath);
             }
         }
 
         private void RemoveDestinationButton_Click(object sender, EventArgs e)
         {
-            if (_destinationListBox.SelectedItem != null) _destinationListBox.Items.Remove(_destinationListBox.SelectedItem);
+            if (_destinationListBox.SelectedItem != null)
+            {
+                _destinationListBox.Items.Remove(_destinationListBox.SelectedItem);
+            }
+        }
+
+        private bool TryBrowseFolder(string description, bool allowCreate, out string selectedPath)
+        {
+            using (FolderBrowserDialog dialog = new FolderBrowserDialog())
+            {
+                dialog.Description = description;
+                dialog.ShowNewFolderButton = allowCreate;
+                dialog.SelectedPath = GetBrowseStartFolder();
+                if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrWhiteSpace(dialog.SelectedPath))
+                {
+                    _lastBrowsedFolder = dialog.SelectedPath;
+                    selectedPath = dialog.SelectedPath;
+                    return true;
+                }
+            }
+
+            selectedPath = null;
+            return false;
+        }
+
+        private string GetBrowseStartFolder()
+        {
+            if (!string.IsNullOrWhiteSpace(_lastBrowsedFolder) && Directory.Exists(_lastBrowsedFolder))
+            {
+                return _lastBrowsedFolder;
+            }
+
+            string pictures = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+            return Directory.Exists(pictures) ? pictures : string.Empty;
         }
 
         private void ActionsCheckedListBox_Format(object sender, ListControlConvertEventArgs e)
@@ -213,6 +302,19 @@ namespace PictureOrganizer
         private void SortOrderComboBox_Format(object sender, ListControlConvertEventArgs e)
         {
             if (e.ListItem is SessionSortOrder) e.Value = SessionSortCatalog.GetDisplayName((SessionSortOrder)e.ListItem);
+        }
+
+        private static void AddUniqueItem(ListBox listBox, string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            if (!listBox.Items.Cast<string>().Any(item => string.Equals(item, path, StringComparison.OrdinalIgnoreCase)))
+            {
+                listBox.Items.Add(path);
+            }
         }
 
         private static Label CreateLabel(string text, int x, int y)
