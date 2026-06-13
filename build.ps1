@@ -19,6 +19,9 @@ $references = @(
     "/reference:$framework\System.Core.dll",
     "/reference:$framework\System.Drawing.dll",
     "/reference:$framework\Microsoft.VisualBasic.dll",
+    "/reference:$framework\WPF\WindowsBase.dll",
+    "/reference:$framework\WPF\PresentationCore.dll",
+    "/reference:$framework\System.Xaml.dll",
     "/reference:$framework\System.Runtime.Serialization.dll",
     "/reference:$framework\System.Runtime.dll",
     "/reference:$framework\System.Runtime.InteropServices.WindowsRuntime.dll",
@@ -127,9 +130,9 @@ public static class ExeVersionStamp
         var values = new Dictionary<string, string>
         {
             { "FileDescription", "Photo Organizer Application" },
-            { "FileVersion", "1.0.1.0" },
+            { "FileVersion", "1.0.2.0" },
             { "ProductName", "Canup Photo Organizer" },
-            { "ProductVersion", "1.0.1" },
+            { "ProductVersion", "1.0.2" },
             { "LegalCopyright", "Copyright (C) 2026 Mark Canup" }
         };
 

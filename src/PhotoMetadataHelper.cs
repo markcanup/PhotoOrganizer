@@ -6,6 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Runtime.Serialization;
+using System.Runtime.InteropServices;
+using WpfImaging = System.Windows.Media.Imaging;
+using WpfMedia = System.Windows.Media;
 
 namespace PictureOrganizer
 {
@@ -33,6 +36,13 @@ namespace PictureOrganizer
         public static bool IsPdfFile(string filePath)
         {
             return string.Equals(Path.GetExtension(filePath), ".pdf", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsHeifFile(string filePath)
+        {
+            string extension = Path.GetExtension(filePath);
+            return string.Equals(extension, ".heic", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(extension, ".heif", StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool IsJpegFile(string filePath)
@@ -72,6 +82,11 @@ namespace PictureOrganizer
 
             try
             {
+                if (IsHeifFile(filePath))
+                {
+                    return TryReadHeifDateTaken(filePath);
+                }
+
                 using (Image image = Image.FromFile(filePath))
                 {
                     int[] ids = { ExifDateTakenId, ExifDateDigitizedId, ExifDateModifiedId };
@@ -205,7 +220,7 @@ namespace PictureOrganizer
                 }
             }
 
-            using (Image image = Image.FromFile(filePath))
+            using (Image image = LoadRasterImage(filePath))
             {
                 return ResizeImage(image, maxSize, maxSize);
             }
@@ -221,7 +236,7 @@ namespace PictureOrganizer
                 }
             }
 
-            using (Image image = Image.FromFile(filePath))
+            using (Image image = LoadRasterImage(filePath))
             {
                 return image.Size;
             }
@@ -234,7 +249,12 @@ namespace PictureOrganizer
                 return PdfPhotoProcessor.RenderPdfPageToBitmap(filePath);
             }
 
-            using (Image image = Image.FromFile(filePath))
+            return LoadBitmap(filePath);
+        }
+
+        public static Bitmap LoadBitmap(string filePath)
+        {
+            using (Image image = LoadRasterImage(filePath))
             {
                 return new Bitmap(image);
             }
@@ -291,6 +311,151 @@ namespace PictureOrganizer
         private static PropertyItem CreatePropertyItem()
         {
             return (PropertyItem)FormatterServices.GetUninitializedObject(typeof(PropertyItem));
+        }
+
+        private static Image LoadRasterImage(string filePath)
+        {
+            if (!IsHeifFile(filePath))
+            {
+                return Image.FromFile(filePath);
+            }
+
+            try
+            {
+                return Image.FromFile(filePath);
+            }
+            catch
+            {
+                return LoadHeifBitmapWithWic(filePath);
+            }
+        }
+
+        private static Bitmap LoadHeifBitmapWithWic(string filePath)
+        {
+            WpfImaging.BitmapSource source = GetHeifBitmapSource(filePath);
+            if (source.Format != WpfMedia.PixelFormats.Bgra32)
+            {
+                source = new WpfImaging.FormatConvertedBitmap(source, WpfMedia.PixelFormats.Bgra32, null, 0);
+            }
+
+            int stride = source.PixelWidth * 4;
+            byte[] pixels = new byte[stride * source.PixelHeight];
+            source.CopyPixels(pixels, stride, 0);
+
+            Bitmap bitmap = new Bitmap(source.PixelWidth, source.PixelHeight, PixelFormat.Format32bppArgb);
+            Rectangle rectangle = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            BitmapData data = bitmap.LockBits(rectangle, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                Marshal.Copy(pixels, 0, data.Scan0, pixels.Length);
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+
+            return bitmap;
+        }
+
+        private static WpfImaging.BitmapFrame GetHeifFrame(string filePath)
+        {
+            using (FileStream stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                WpfImaging.BitmapDecoder decoder = WpfImaging.BitmapDecoder.Create(
+                    stream,
+                    WpfImaging.BitmapCreateOptions.PreservePixelFormat,
+                    WpfImaging.BitmapCacheOption.OnLoad);
+                if (decoder.Frames.Count == 0)
+                {
+                    throw new InvalidOperationException("The HEIC/HEIF file did not contain a readable frame.");
+                }
+
+                return decoder.Frames[0];
+            }
+        }
+
+        private static WpfImaging.BitmapSource GetHeifBitmapSource(string filePath)
+        {
+            return GetHeifFrame(filePath);
+        }
+
+        private static DateTime? TryReadHeifDateTaken(string filePath)
+        {
+            try
+            {
+                WpfImaging.BitmapFrame frame = GetHeifFrame(filePath);
+                WpfImaging.BitmapMetadata metadata = frame.Metadata as WpfImaging.BitmapMetadata;
+                if (metadata == null)
+                {
+                    return null;
+                }
+
+                DateTime? parsed = ParseMetadataDate(metadata.DateTaken);
+                if (parsed.HasValue)
+                {
+                    return parsed;
+                }
+
+                string[] queries =
+                {
+                    "/app1/ifd/exif/{ushort=36867}",
+                    "/app1/ifd/exif/{ushort=36868}",
+                    "/xmp/exif:DateTimeOriginal",
+                    "/xmp/xmp:CreateDate"
+                };
+                foreach (string query in queries)
+                {
+                    try
+                    {
+                        object value = metadata.GetQuery(query);
+                        DateTime? queryDate = ParseMetadataDate(value == null ? null : value.ToString());
+                        if (queryDate.HasValue)
+                        {
+                            return queryDate;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private static DateTime? ParseMetadataDate(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            string[] formats =
+            {
+                "yyyy:MM:dd HH:mm:ss",
+                "yyyy-MM-dd HH:mm:ss",
+                "yyyy-MM-ddTHH:mm:ss",
+                "yyyy-MM-ddTHH:mm:ssK",
+                "yyyy-MM-ddTHH:mm:sszzz"
+            };
+            DateTime parsed;
+            foreach (string format in formats)
+            {
+                if (DateTime.TryParseExact(raw.Trim(), format, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AllowWhiteSpaces, out parsed))
+                {
+                    return parsed;
+                }
+            }
+
+            if (DateTime.TryParse(raw, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AllowWhiteSpaces, out parsed))
+            {
+                return parsed;
+            }
+
+            return null;
         }
 
         private static Image ResizeImage(Image image, int maxWidth, int maxHeight)

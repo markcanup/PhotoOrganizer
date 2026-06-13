@@ -114,9 +114,16 @@ Undo behavior lives in `MainForm.cs`. If you add a new undoable action:
 - JPEG and PNG ratings are read/written through Windows Shell properties
 - GIF ratings are unsupported
 - PDF uses first-page preview and page count instead of EXIF date
+- HEIC / HEIF use a WIC/WPF decoder fallback path when `System.Drawing` cannot decode them
+- HEIC / HEIF still depend on the Microsoft HEIF/HEVC codec support being present on the machine in this build
 - filename date comparison accepts:
   - `YYYYMMDD-...`
   - `YYYY-MM-DD...`
+
+### HEIC / HEIF write limitations
+
+- HEIC / HEIF loading, preview, and conversion are supported.
+- Rotate and autocrop are intentionally disabled for HEIC / HEIF because the current save-back pipeline does not write native HEIC/HEIF output.
 
 ## Compare View
 

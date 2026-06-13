@@ -58,6 +58,13 @@ When changing session shape, update:
 - GIF rating is unsupported.
 - Avoid reintroducing config-based ratings.
 
+## HEIC / HEIF Handling
+
+- `HEIC` / `HEIF` detection is extension-based in `src/PhotoMetadataHelper.cs`.
+- Decode now falls back to a WIC/WPF path for `HEIC` / `HEIF` when `System.Drawing` cannot open the file.
+- This improves compatibility with the Microsoft HEIF/HEVC extensions installed on Windows machines.
+- In this build, `HEIC` / `HEIF` are supported for loading, previewing, and conversion, but rotate/autocrop are intentionally blocked to avoid writing invalid `.heic` content.
+
 ## Build
 
 Use:

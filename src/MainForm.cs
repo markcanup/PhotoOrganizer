@@ -392,6 +392,7 @@ namespace PictureOrganizer
             List<string> selectedPaths = selectedItems.Select(item => item.FilePath).ToList();
             bool single = selectedItems.Count == 1;
             bool containsPdf = selectedItems.Any(item => item.IsPdf);
+            bool containsHeif = selectedItems.Any(item => PhotoMetadataHelper.IsHeifFile(item.FilePath));
             bool allJpeg = selectedItems.Count > 0 && selectedItems.All(item => PhotoMetadataHelper.IsJpegFile(item.FilePath));
             bool allPng = selectedItems.Count > 0 && selectedItems.All(item => PhotoMetadataHelper.IsPngFile(item.FilePath));
 
@@ -486,11 +487,11 @@ namespace PictureOrganizer
                         {
                             ExecuteAction(delegate { ImageFileOperations.AutoCropFiles(selectedPaths); UpdateGridItems(selectedPaths); }, "Autocropped.");
                         });
-                        crop.Enabled = !containsPdf;
+                        crop.Enabled = !containsPdf && !containsHeif;
                         menu.Items.Add(crop);
                         break;
                     case SessionActionType.Rotate:
-                        menu.Items.Add(BuildRotateMenu(selectedPaths, containsPdf));
+                        menu.Items.Add(BuildRotateMenu(selectedPaths, containsPdf || containsHeif));
                         break;
                     case SessionActionType.Delete:
                         menu.Items.Add(CreateActionMenuItem(SessionActionType.Delete, "Delete", delegate { DeleteSelectedItems(); }));

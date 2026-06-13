@@ -219,7 +219,10 @@
       <ul>
         <li>JPEG and PNG ratings use the Windows rating property system.</li>
         <li>GIF rating is not supported.</li>
-        <li>On some Windows systems, HEIC and HEIF support requires the HEIF image extensions and related codecs to be installed.</li>
+        <li>The app now uses a Windows Imaging Component fallback path for HEIC and HEIF files instead of relying only on GDI+.</li>
+        <li>On some Windows systems, HEIC and HEIF support still requires the Microsoft HEIF image extensions and related HEVC codecs to be installed.</li>
+        <li>HEIC and HEIF viewing, thumbnails, compare, and conversion are supported in this build.</li>
+        <li>HEIC and HEIF rotate and autocrop are currently disabled.</li>
         <li>PDF files use a first-page preview.</li>
       </ul>
     </div>

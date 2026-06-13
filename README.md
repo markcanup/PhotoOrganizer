@@ -7,6 +7,7 @@ The application supports:
 - Session-based configuration stored in `C:\ProgramData\PhotoOrganizer\PhotoOrganizer.config`
 - Per-session source folders, destination folders, visible actions, thumbnail size, sort order, recurse-subdirectories option, info-pane width, filename display, date-difference highlighting, and optional action display in the info pane
 - Supported source types: `JPG`, `JPEG`, `PNG`, `GIF`, `TIFF`, `TIF`, `HEIC`, `HEIF`, and `PDF`
+- `HEIC` / `HEIF` loading now uses a Windows Imaging Component fallback path instead of only `System.Drawing`, which improves compatibility on systems where the Microsoft HEIF/HEVC extensions are installed
 - Recursive or top-level file loading, depending on session settings
 - Square thumbnail grid with selection, keyboard navigation, thumbnail resizing, fullscreen view, and side-by-side compare view
 - Actions for copy, move, date update, rename, convert, autocrop, rotate, delete, rating, compare, and external edit
@@ -44,6 +45,14 @@ Output:
 - `bin\PhotoOrganizer.exe`
 
 The build currently uses the .NET Framework C# compiler directly and stamps Windows file-version metadata after compilation.
+
+## HEIC / HEIF Notes
+
+- The app now uses a WIC-based decode fallback for `HEIC` / `HEIF` files instead of relying only on GDI+ / `System.Drawing`.
+- This improves compatibility on machines where the Microsoft HEIF/HEVC extensions are installed but `Image.FromFile(...)` still fails.
+- `HEIC` / `HEIF` still depend on the Windows codec being available on the target machine in this build.
+- `HEIC` / `HEIF` viewing, thumbnails, compare, and conversion are supported.
+- `HEIC` / `HEIF` rotate and autocrop are currently disabled to avoid writing back an invalid file format.
 
 ## Runtime Storage
 

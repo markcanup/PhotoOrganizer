@@ -54,7 +54,7 @@ namespace PictureOrganizer
             {
                 DateTime originalLastWriteTime = File.GetLastWriteTime(filePath);
                 int? originalRating = PhotoMetadataHelper.SupportsShellRating(filePath) ? ShellRatingHelper.TryReadRating(filePath) : null;
-                using (Bitmap bitmap = new Bitmap(filePath))
+                using (Bitmap bitmap = PhotoMetadataHelper.LoadBitmap(filePath))
                 {
                     string extension = targetFormat.Guid == ImageFormat.Png.Guid ? ".png" : ".jpg";
                     string newPath = EnsureUniquePath(Path.GetDirectoryName(filePath), Path.GetFileNameWithoutExtension(filePath) + extension);
@@ -74,7 +74,12 @@ namespace PictureOrganizer
         {
             foreach (string filePath in filePaths)
             {
-                using (Bitmap bitmap = new Bitmap(filePath))
+                if (PhotoMetadataHelper.IsHeifFile(filePath))
+                {
+                    throw new InvalidOperationException("Autocrop is not currently supported for HEIC/HEIF files.");
+                }
+
+                using (Bitmap bitmap = PhotoMetadataHelper.LoadBitmap(filePath))
                 using (Bitmap cropped = PdfPhotoProcessor.AutoCropBitmap(bitmap))
                 {
                     string tempPath = Path.Combine(Path.GetDirectoryName(filePath), Guid.NewGuid().ToString("N") + Path.GetExtension(filePath));
@@ -94,11 +99,16 @@ namespace PictureOrganizer
         {
             foreach (string filePath in filePaths)
             {
+                if (PhotoMetadataHelper.IsHeifFile(filePath))
+                {
+                    throw new InvalidOperationException("Rotate is not currently supported for HEIC/HEIF files.");
+                }
+
                 DateTime originalLastWriteTime = File.GetLastWriteTime(filePath);
                 int? originalRating = PhotoMetadataHelper.SupportsShellRating(filePath) ? ShellRatingHelper.TryReadRating(filePath) : null;
                 string tempOriginalPath = Path.Combine(Path.GetDirectoryName(filePath), Guid.NewGuid().ToString("N") + Path.GetExtension(filePath));
                 File.Move(filePath, tempOriginalPath);
-                using (Image image = Image.FromFile(tempOriginalPath))
+                using (Image image = PhotoMetadataHelper.LoadBitmap(tempOriginalPath))
                 {
                     image.RotateFlip(rotateFlipType);
                     SaveImageWithOriginalFormat(image, filePath, tempOriginalPath);
