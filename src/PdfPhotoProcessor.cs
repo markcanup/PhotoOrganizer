@@ -8,7 +8,6 @@ using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.Data.Pdf;
 
-using Windows.Storage;
 using Windows.Storage.Streams;
 
 namespace PictureOrganizer
@@ -89,10 +88,10 @@ namespace PictureOrganizer
             }
         }
 
-        public static Bitmap RenderPdfPageToBitmap(string pdfPath)
+        public static Bitmap RenderPdfPageToBitmap(string pdfPath, int maxDimension = 0)
         {
-            StorageFile storageFile = Await(StorageFile.GetFileFromPathAsync(pdfPath));
-            PdfDocument document = Await(PdfDocument.LoadFromFileAsync(storageFile));
+            return WithPdf(pdfPath, delegate(PdfDocument document)
+            {
             if (document.PageCount == 0)
             {
                 throw new InvalidOperationException("The PDF does not contain any pages.");
@@ -104,6 +103,7 @@ namespace PictureOrganizer
                 using (var stream = new InMemoryRandomAccessStream())
                 {
                     double scale = 600.0 / 96.0;
+                    if (maxDimension > 0) scale = maxDimension / Math.Max(page.Size.Width, page.Size.Height);
                     uint width = Math.Max(1u, (uint)Math.Round(page.Size.Width * scale));
                     uint height = Math.Max(1u, (uint)Math.Round(page.Size.Height * scale));
 
@@ -133,13 +133,30 @@ namespace PictureOrganizer
                     page.Dispose();
                 }
             }
+            });
         }
 
         public static int GetPdfPageCount(string pdfPath)
         {
-            StorageFile storageFile = Await(StorageFile.GetFileFromPathAsync(pdfPath));
-            PdfDocument document = Await(PdfDocument.LoadFromFileAsync(storageFile));
-            return (int)document.PageCount;
+            return WithPdf(pdfPath, document => (int)document.PageCount);
+        }
+
+        public static Size GetPdfPagePixelSize(string pdfPath)
+        {
+            return WithPdf(pdfPath, delegate(PdfDocument document)
+            {
+            if (document.PageCount == 0) throw new InvalidDataException("The PDF does not contain any pages.");
+            using (PdfPage page = document.GetPage(0))
+                return new Size(Math.Max(1, (int)Math.Round(page.Size.Width * 600.0 / 96.0)), Math.Max(1, (int)Math.Round(page.Size.Height * 600.0 / 96.0)));
+            });
+        }
+
+        private static T WithPdf<T>(string path, Func<PdfDocument, T> action)
+        {
+            // Keep the ordinary file stream alive until rendering is complete.
+            using (FileStream source = File.OpenRead(path))
+            using (IRandomAccessStream stream = source.AsRandomAccessStream())
+                return action(Await(PdfDocument.LoadFromStreamAsync(stream)));
         }
 
         private static T Await<T>(Windows.Foundation.IAsyncOperation<T> operation)

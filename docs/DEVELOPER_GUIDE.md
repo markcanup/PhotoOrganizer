@@ -146,9 +146,9 @@ The compare viewer displays:
 The compiled EXE should expose these Windows file properties:
 
 - File description: `Photo Organizer Application`
-- File version: `1.0.3.0`
+- File version: `1.0.4.0`
 - Product name: `Canup Photo Organizer`
-- Product version: `1.0.3`
+- Product version: `1.0.4`
 - Copyright: `Copyright (C) 2026 Mark Canup`
 
 These are stamped in the build pipeline, not only in managed assembly attributes.
@@ -161,3 +161,4 @@ Increment the version metadata on each new build-oriented release so the EXE ver
 - Preserve backward compatibility for config and change-log parsing.
 - Treat `MainForm.cs` as the integration point and keep helper logic in helper files when possible.
 - Rebuild after any UI or persistence change.
+

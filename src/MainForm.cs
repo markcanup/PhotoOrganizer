@@ -636,6 +636,15 @@ namespace PictureOrganizer
             }) { Enabled = !containsPdf && !allPng };
             menu.DropDownItems.Add(jpeg);
             menu.DropDownItems.Add(png);
+            menu.DropDownItems.Add(new ToolStripMenuItem("PDF", null, delegate
+            {
+                ExecuteAction(delegate
+                {
+                    FileBatchResult<ConvertFileChange> result = ImageFileOperations.ConvertToPdf(selectedPaths, new FileOperationJournal(_currentSession));
+                    AddGridItems(result.Completed.Select(item => item.CreatedPath));
+                    ReportFileBatch("Converted to PDF", result.Completed.Count, result.Failures);
+                }, "Converted to PDF.");
+            }) { Enabled = !containsPdf && selectedPaths.Count > 0 });
             return menu;
         }
 

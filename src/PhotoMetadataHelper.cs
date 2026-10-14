@@ -214,7 +214,7 @@ namespace PictureOrganizer
         {
             if (IsPdfFile(filePath))
             {
-                using (Bitmap rendered = PdfPhotoProcessor.RenderPdfPageToBitmap(filePath))
+                using (Bitmap rendered = PdfPhotoProcessor.RenderPdfPageToBitmap(filePath, maxSize))
                 {
                     return ResizeImage(rendered, maxSize, maxSize);
                 }
@@ -230,10 +230,7 @@ namespace PictureOrganizer
         {
             if (IsPdfFile(filePath))
             {
-                using (Bitmap rendered = PdfPhotoProcessor.RenderPdfPageToBitmap(filePath))
-                {
-                    return rendered.Size;
-                }
+                return PdfPhotoProcessor.GetPdfPagePixelSize(filePath);
             }
 
             using (Image image = LoadRasterImage(filePath))
@@ -246,7 +243,7 @@ namespace PictureOrganizer
         {
             if (IsPdfFile(filePath))
             {
-                return PdfPhotoProcessor.RenderPdfPageToBitmap(filePath);
+                return PdfPhotoProcessor.RenderPdfPageToBitmap(filePath, 1920);
             }
 
             return LoadBitmap(filePath);
@@ -257,6 +254,25 @@ namespace PictureOrganizer
             using (Image image = LoadRasterImage(filePath))
             {
                 return new Bitmap(image);
+            }
+        }
+
+        public static Bitmap LoadBitmapForPdf(string filePath)
+        {
+            using (Image image = LoadRasterImage(filePath))
+            {
+                int orientation = 1;
+                if (image.PropertyIdList.Contains(0x0112))
+                {
+                    byte[] value = image.GetPropertyItem(0x0112).Value;
+                    if (value != null && value.Length >= 2) orientation = BitConverter.ToUInt16(value, 0);
+                }
+                Bitmap bitmap = new Bitmap(image);
+                RotateFlipType[] transforms = { RotateFlipType.RotateNoneFlipNone, RotateFlipType.RotateNoneFlipNone,
+                    RotateFlipType.RotateNoneFlipX, RotateFlipType.Rotate180FlipNone, RotateFlipType.RotateNoneFlipY,
+                    RotateFlipType.Rotate90FlipX, RotateFlipType.Rotate90FlipNone, RotateFlipType.Rotate270FlipX, RotateFlipType.Rotate270FlipNone };
+                if (orientation >= 2 && orientation <= 8) bitmap.RotateFlip(transforms[orientation]);
+                return bitmap;
             }
         }
 

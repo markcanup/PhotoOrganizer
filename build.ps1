@@ -76,7 +76,7 @@ public static class ExeVersionStamp
 
         if (!EndUpdateResource(handle, false))
         {
-            throw new InvalidOperationException("EndUpdateResource failed.");
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "EndUpdateResource failed.");
         }
     }
 
@@ -111,9 +111,9 @@ public static class ExeVersionStamp
             writer.Write(0xFEEF04BDu);
             writer.Write(0x00010000u);
             writer.Write(0x00010000u);
-            writer.Write(0x00030000u);
+            writer.Write(0x00040000u);
             writer.Write(0x00010000u);
-            writer.Write(0x00030000u);
+            writer.Write(0x00040000u);
             writer.Write(0x0000003Fu);
             writer.Write(0x00000000u);
             writer.Write(0x00040004u);
@@ -130,9 +130,9 @@ public static class ExeVersionStamp
         var values = new Dictionary<string, string>
         {
             { "FileDescription", "Photo Organizer Application" },
-            { "FileVersion", "1.0.3.0" },
+            { "FileVersion", "1.0.4.0" },
             { "ProductName", "Canup Photo Organizer" },
-            { "ProductVersion", "1.0.3" },
+            { "ProductVersion", "1.0.4" },
             { "LegalCopyright", "Copyright (C) 2026 Mark Canup" }
         };
 
@@ -251,4 +251,6 @@ Add-Type -TypeDefinition $stampSource -Language CSharp
 [ExeVersionStamp]::Stamp($output)
 
 Write-Host "Built $output"
+
+
 

@@ -61,18 +61,38 @@ namespace PictureOrganizer
 
         public static FileBatchResult<ConvertFileChange> ConvertFiles(IEnumerable<string> paths, ImageFormat format, FileOperationJournal journal)
         {
+            return ConvertFiles(paths, format, false, journal);
+        }
+
+        public static FileBatchResult<ConvertFileChange> ConvertToPdf(IEnumerable<string> paths, FileOperationJournal journal)
+        {
+            return ConvertFiles(paths, null, true, journal);
+        }
+
+        private static FileBatchResult<ConvertFileChange> ConvertFiles(IEnumerable<string> paths, ImageFormat format, bool pdf, FileOperationJournal journal)
+        {
             FileBatchResult<ConvertFileChange> result = new FileBatchResult<ConvertFileChange>();
             foreach (string path in paths)
             {
                 string temp = FileSafety.TemporaryPath(path);
                 try
                 {
-                    string extension = format.Guid == ImageFormat.Png.Guid ? ".png" : ".jpg";
+                    if (PhotoMetadataHelper.IsPdfFile(path)) throw new InvalidOperationException("Choose a photo to convert, rather than an existing PDF.");
+                    string extension = pdf ? ".pdf" : format.Guid == ImageFormat.Png.Guid ? ".png" : ".jpg";
                     string target = EnsureUniquePath(Path.GetDirectoryName(path), Path.GetFileNameWithoutExtension(path) + extension);
                     temp = FileSafety.TemporaryPath(target);
-                    using (Bitmap bitmap = PhotoMetadataHelper.LoadBitmap(path)) PdfPhotoProcessor.SaveBitmap(bitmap, temp, format);
+                    using (Bitmap bitmap = pdf ? PhotoMetadataHelper.LoadBitmapForPdf(path) : PhotoMetadataHelper.LoadBitmap(path))
+                    {
+                        if (pdf) PhotoPdfWriter.Save(bitmap, temp);
+                        else PdfPhotoProcessor.SaveBitmap(bitmap, temp, format);
+                    }
                     PreserveRatingAndTime(path, temp, File.GetLastWriteTime(path));
-                    FileSafety.ValidateImage(temp);
+                    if (pdf)
+                    {
+                        if (PdfPhotoProcessor.GetPdfPageCount(temp) != 1) throw new InvalidDataException("The converted PDF did not contain one page.");
+                        using (Bitmap preview = PdfPhotoProcessor.RenderPdfPageToBitmap(temp, 360)) { }
+                    }
+                    else FileSafety.ValidateImage(temp);
                     ConvertFileChange change = new ConvertFileChange { SourcePath = path, CreatedPath = target, CreatedHash = FileSafety.Hash(temp) };
                     journal.Execute(Guid.NewGuid().ToString("N"), ChangeLogKind.Convert, "Converted " + Path.GetFileName(path) + " -> " + Path.GetFileName(target), change,
                         delegate { FileSafety.Publish(temp, target, false); },
