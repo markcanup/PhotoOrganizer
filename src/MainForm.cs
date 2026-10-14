@@ -47,6 +47,7 @@ namespace PictureOrganizer
         private bool _startupLoadPending;
         private CancellationTokenSource _loadCancellationSource;
         private int _loadSequence;
+        private int _statusSequence;
 
         public MainForm()
         {
@@ -415,16 +416,8 @@ namespace PictureOrganizer
                         {
                             ExecuteAction(delegate
                             {
-                                FileTransferResult result = ImageFileOperations.CopyFiles(selectedPaths, d, ResolveConflict);
-                                foreach (FileTransferPair pair in result.CompletedTransfers)
-                                {
-                                    AppendChangeLog(ChangeLogKind.Copy, "Copied " + Path.GetFileName(pair.SourcePath) + " -> " + Path.GetFileName(pair.DestinationPath), new PathPairChange
-                                    {
-                                        SourcePath = pair.SourcePath,
-                                        DestinationPath = pair.DestinationPath
-                                    });
-                                }
-                                SetStatus(BuildTransferStatus("Copied", result));
+                                FileTransferResult result = ImageFileOperations.CopyFiles(selectedPaths, d, ResolveConflict, new FileOperationJournal(_currentSession));
+                                ReportTransfers("Copied", result);
                             }, "Copied.");
                         }));
                         break;
@@ -433,19 +426,11 @@ namespace PictureOrganizer
                         {
                             ExecuteAction(delegate
                             {
-                                FileTransferResult result = ImageFileOperations.MoveFiles(selectedPaths, d, ResolveConflict);
-                                foreach (FileTransferPair pair in result.CompletedTransfers)
-                                {
-                                    AppendChangeLog(ChangeLogKind.Move, "Moved " + Path.GetFileName(pair.SourcePath) + " -> " + Path.GetFileName(pair.DestinationPath), new PathPairChange
-                                    {
-                                        SourcePath = pair.SourcePath,
-                                        DestinationPath = pair.DestinationPath
-                                    });
-                                }
+                                FileTransferResult result = ImageFileOperations.MoveFiles(selectedPaths, d, ResolveConflict, new FileOperationJournal(_currentSession));
                                 _grid.RemoveItems(result.SourcePathsRemoved);
                                 PromptToDeleteEmptySourceFolders(result.SourcePathsRemoved);
                                 UpdateSelectionDetails();
-                                SetStatus(BuildTransferStatus("Moved", result));
+                                ReportTransfers("Moved", result);
                             }, "Moved.");
                         }));
                         break;
@@ -458,18 +443,7 @@ namespace PictureOrganizer
                             {
                                 ExecuteAction(delegate
                                 {
-                                    foreach (string path in selectedPaths)
-                                    {
-                                        DateUpdateFileChange change = new DateUpdateFileChange
-                                        {
-                                            FilePath = path,
-                                            OldDate = PhotoMetadataHelper.GetBestDate(path),
-                                            NewDate = selected
-                                        };
-                                        PhotoMetadataHelper.UpdateDateTakenAndModified(path, selected);
-                                        AppendChangeLog(ChangeLogKind.DateUpdate, "Updated date for " + Path.GetFileName(path), change);
-                                        UpdateGridItem(path);
-                                    }
+                                    RunFileBatch(selectedPaths, "Updated dates", delegate(string path) { ImageFileOperations.UpdateDate(path, selected, new FileOperationJournal(_currentSession)); UpdateGridItem(path); });
                                 }, "Updated dates.");
                             }
                         });
@@ -485,7 +459,7 @@ namespace PictureOrganizer
                     case SessionActionType.Autocrop:
                         ToolStripMenuItem crop = CreateActionMenuItem(SessionActionType.Autocrop, "Autocrop", delegate
                         {
-                            ExecuteAction(delegate { ImageFileOperations.AutoCropFiles(selectedPaths); UpdateGridItems(selectedPaths); }, "Autocropped.");
+                            ExecuteAction(delegate { ExecuteAutoCrop(selectedPaths); }, "Autocropped.");
                         });
                         crop.Enabled = !containsPdf && !containsHeif;
                         menu.Items.Add(crop);
@@ -609,8 +583,7 @@ namespace PictureOrganizer
                 {
                     ExecuteAction(delegate
                     {
-                        string renamed = ImageFileOperations.RenameFile(filePath, newName);
-                        AppendChangeLog(ChangeLogKind.Rename, "Renamed " + Path.GetFileName(filePath) + " -> " + Path.GetFileName(renamed), new PathPairChange { SourcePath = filePath, DestinationPath = renamed });
+                        string renamed = ImageFileOperations.RenameFile(filePath, newName, new FileOperationJournal(_currentSession));
                         ReplaceGridItem(filePath, renamed);
                         _grid.SelectSingle(renamed);
                     }, "Renamed.");
@@ -630,13 +603,10 @@ namespace PictureOrganizer
                 {
                     ExecuteAction(delegate
                     {
-                        List<string> renamed = ImageFileOperations.ApplyRenameRule(selectedPaths, capture);
-                        for (int i = 0; i < selectedPaths.Count && i < renamed.Count; i++)
-                        {
-                            AppendChangeLog(ChangeLogKind.Rename, "Renamed " + Path.GetFileName(selectedPaths[i]) + " -> " + Path.GetFileName(renamed[i]), new PathPairChange { SourcePath = selectedPaths[i], DestinationPath = renamed[i] });
-                            ReplaceGridItem(selectedPaths[i], renamed[i]);
-                        }
-                        if (renamed.Count == 1) _grid.SelectSingle(renamed[0]);
+                        FileBatchResult<PathPairChange> result = ImageFileOperations.ApplyRenameRule(selectedPaths, capture, new FileOperationJournal(_currentSession));
+                        foreach (PathPairChange pair in result.Completed) ReplaceGridItem(pair.SourcePath, pair.DestinationPath);
+                        if (result.Completed.Count == 1) _grid.SelectSingle(result.Completed[0].DestinationPath);
+                        ReportFileBatch("Renamed", result.Completed.Count, result.Failures);
                     }, "Renamed.");
                 }));
             }
@@ -650,24 +620,18 @@ namespace PictureOrganizer
             {
                 ExecuteAction(delegate
                 {
-                    List<string> createdPaths = ImageFileOperations.ConvertFiles(selectedPaths, ImageFormat.Jpeg);
-                    for (int i = 0; i < selectedPaths.Count && i < createdPaths.Count; i++)
-                    {
-                        AppendChangeLog(ChangeLogKind.Convert, "Converted " + Path.GetFileName(selectedPaths[i]) + " -> " + Path.GetFileName(createdPaths[i]), new ConvertFileChange { SourcePath = selectedPaths[i], CreatedPath = createdPaths[i] });
-                    }
-                    AddGridItems(createdPaths);
+                    FileBatchResult<ConvertFileChange> result = ImageFileOperations.ConvertFiles(selectedPaths, ImageFormat.Jpeg, new FileOperationJournal(_currentSession));
+                    AddGridItems(result.Completed.Select(item => item.CreatedPath));
+                    ReportFileBatch("Converted", result.Completed.Count, result.Failures);
                 }, "Converted.");
             }) { Enabled = !containsPdf && !allJpeg };
             ToolStripMenuItem png = new ToolStripMenuItem("PNG", null, delegate
             {
                 ExecuteAction(delegate
                 {
-                    List<string> createdPaths = ImageFileOperations.ConvertFiles(selectedPaths, ImageFormat.Png);
-                    for (int i = 0; i < selectedPaths.Count && i < createdPaths.Count; i++)
-                    {
-                        AppendChangeLog(ChangeLogKind.Convert, "Converted " + Path.GetFileName(selectedPaths[i]) + " -> " + Path.GetFileName(createdPaths[i]), new ConvertFileChange { SourcePath = selectedPaths[i], CreatedPath = createdPaths[i] });
-                    }
-                    AddGridItems(createdPaths);
+                    FileBatchResult<ConvertFileChange> result = ImageFileOperations.ConvertFiles(selectedPaths, ImageFormat.Png, new FileOperationJournal(_currentSession));
+                    AddGridItems(result.Completed.Select(item => item.CreatedPath));
+                    ReportFileBatch("Converted", result.Completed.Count, result.Failures);
                 }, "Converted.");
             }) { Enabled = !containsPdf && !allPng };
             menu.DropDownItems.Add(jpeg);
@@ -800,8 +764,10 @@ namespace PictureOrganizer
                     {
                         item = await Task.Run(delegate { return CreatePhotoItem(filePath); }, cancellationToken);
                     }
+                    catch (OperationCanceledException) { throw; }
                     catch (Exception)
                     {
+                        if (!IsCurrentLoad(loadId, cancellationSource)) return;
                         UpdateProgress(i + 1, filePaths.Count, "Loading " + (i + 1) + " of " + filePaths.Count + "...");
                         continue;
                     }
@@ -938,12 +904,15 @@ namespace PictureOrganizer
 
         private void ExecuteAction(Action action, string successMessage)
         {
-            try { action(); if (!_loadingProgressBar.Visible) SetStatus(successMessage); }
+            CancelActiveLoad();
+            int statusBeforeAction = _statusSequence;
+            try { action(); if (statusBeforeAction == _statusSequence) SetStatus(successMessage); }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "Action Failed", MessageBoxButtons.OK, MessageBoxIcon.Error); SetStatus("Action failed."); }
         }
 
         private void SetStatus(string message)
         {
+            _statusSequence++;
             _lastActionValueLabel.Text = message;
             _instructionsLabel.Text = "Selection\r\nCtrl-click toggles photos.\r\nShift-click selects a range.\r\nDouble-click opens fullscreen.\r\nRight-click opens the action menu.\r\nDrag a thumbnail edge to resize all thumbnails.\r\nUse the pane divider to resize the info panel.";
         }
@@ -1057,9 +1026,13 @@ namespace PictureOrganizer
 
         private void CancelActiveLoad()
         {
-            if (_loadCancellationSource != null && !_loadCancellationSource.IsCancellationRequested)
+            if (_loadCancellationSource != null)
             {
                 _loadCancellationSource.Cancel();
+                _loadCancellationSource = null;
+                _loadSequence++;
+                EndProgress();
+                SetStatus("Loading cancelled.");
             }
         }
 
@@ -1106,44 +1079,77 @@ namespace PictureOrganizer
 
             ExecuteAction(delegate
             {
-                foreach (string path in selectedPaths)
+                List<string> removed = new List<string>();
+                RunFileBatch(selectedPaths, "Deleted", delegate(string path)
                 {
-                    string entryId = Guid.NewGuid().ToString("N");
-                    string backupPath = ChangeLogStore.CreateBackupPath(entryId, path);
-                    File.Copy(path, backupPath, true);
-                    if (!RecycleBinHelper.TrySendFileToRecycleBin(path))
-                    {
-                        File.Delete(path);
-                    }
-                    AppendChangeLog(ChangeLogKind.Delete, "Deleted " + Path.GetFileName(path), new DeleteBackupChange { OriginalPath = path, BackupPath = backupPath }, entryId);
-                }
-                _grid.RemoveItems(selectedPaths);
-                PromptToDeleteEmptySourceFolders(selectedPaths);
+                    ImageFileOperations.DeleteFile(path, new FileOperationJournal(_currentSession));
+                    removed.Add(path);
+                    _grid.RemoveItems(new[] { path });
+                });
+                PromptToDeleteEmptySourceFolders(removed);
                 UpdateSelectionDetails();
             }, "Deleted.");
         }
 
-        private void ExecuteRotate(List<string> selectedPaths, RotateFlipType rotateFlipType, string summary)
+        private void ExecuteRotate(List<string> selectedPaths, RotateFlipType rotation, string summary)
         {
             ExecuteAction(delegate
             {
-                List<KeyValuePair<string, RotateBackupChange>> logs = new List<KeyValuePair<string, RotateBackupChange>>();
-                foreach (string path in selectedPaths)
+                RunFileBatch(selectedPaths, "Rotated", delegate(string path)
                 {
-                    string entryId = Guid.NewGuid().ToString("N");
-                    string backupPath = ChangeLogStore.CreateBackupPath(entryId, path);
-                    File.Copy(path, backupPath, true);
-                    logs.Add(new KeyValuePair<string, RotateBackupChange>(entryId, new RotateBackupChange { FilePath = path, BackupPath = backupPath }));
-                }
-                ImageFileOperations.RotateFiles(selectedPaths, rotateFlipType);
-                foreach (KeyValuePair<string, RotateBackupChange> log in logs)
-                {
-                    AppendChangeLog(ChangeLogKind.Rotate, summary + " " + Path.GetFileName(log.Value.FilePath), log.Value, log.Key);
-                }
-                UpdateGridItems(selectedPaths);
+                    ImageFileOperations.RotateFile(path, rotation, new FileOperationJournal(_currentSession));
+                    UpdateGridItem(path);
+                });
             }, "Rotated.");
         }
 
+        private void ExecuteAutoCrop(List<string> paths)
+        {
+            int completed = 0, skipped = 0;
+            bool cancelled = false;
+            List<string> failures = new List<string>();
+            foreach (string path in paths)
+            {
+                try
+                {
+                    using (PreparedImageEdit edit = ImageFileOperations.PrepareAutoCrop(path))
+                    using (AutoCropPreviewForm preview = new AutoCropPreviewForm(edit))
+                    {
+                        DialogResult choice = preview.ShowDialog(this);
+                        if (choice == DialogResult.Cancel) { cancelled = true; break; }
+                        if (choice != DialogResult.OK) { skipped++; continue; }
+                        ImageFileOperations.ApplyAutoCrop(edit, new FileOperationJournal(_currentSession));
+                        completed++;
+                        UpdateGridItem(path);
+                    }
+                }
+                catch (Exception ex) { failures.Add(path + ": " + ex.Message); }
+            }
+            ReportFileBatch("Autocropped", completed, failures, skipped, cancelled);
+        }
+
+        private void RunFileBatch(IEnumerable<string> paths, string verb, Action<string> action)
+        {
+            int completed = 0;
+            List<string> failures = new List<string>();
+            foreach (string path in paths)
+            {
+                try { action(path); completed++; }
+                catch (Exception ex) { failures.Add(path + ": " + ex.Message); }
+            }
+            ReportFileBatch(verb, completed, failures);
+        }
+
+        private void ReportTransfers(string verb, FileTransferResult result)
+        {
+            ReportFileBatch(verb, result.CompletedTransfers.Count, result.Failures, result.SkippedPaths.Count, result.Cancelled);
+        }
+
+        private void ReportFileBatch(string verb, int completed, List<string> failures, int skipped = 0, bool cancelled = false)
+        {
+            SetStatus(verb + " " + completed + " file(s); " + skipped + " skipped; " + failures.Count + " failed." + (cancelled ? " Remaining files cancelled." : string.Empty));
+            if (failures.Count > 0) MessageBox.Show(this, string.Join(Environment.NewLine, failures.ToArray()), "Some Files Were Not Completed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         private IEnumerable<string> ApplySortOrder(IEnumerable<string> filePaths)
         {
             switch (_currentSession.SortOrder)
@@ -1186,13 +1192,6 @@ namespace PictureOrganizer
                 default:
                     return string.Compare(first.DisplayName, second.DisplayName, StringComparison.OrdinalIgnoreCase);
             }
-        }
-
-        private string BuildTransferStatus(string verb, FileTransferResult result)
-        {
-            if (result.Cancelled) return verb + " stopped after " + result.DestinationPathsWritten.Count + " file(s).";
-            if (result.SkippedPaths.Count > 0) return verb + " " + result.DestinationPathsWritten.Count + " file(s), skipped " + result.SkippedPaths.Count + ".";
-            return verb + " " + result.DestinationPathsWritten.Count + " file(s).";
         }
 
         private string GetDestinationMenuDisplayPath(string destinationPath)
@@ -1356,6 +1355,7 @@ namespace PictureOrganizer
 
         private void ShowUndoWindow()
         {
+            CancelActiveLoad();
             List<ChangeLogEntry> entries = ChangeLogStore.LoadForSession(_currentSession.SessionId);
             if (entries.Count == 0)
             {
@@ -1416,169 +1416,74 @@ namespace PictureOrganizer
 
         private void RollbackEntry(ChangeLogEntry entry)
         {
+            bool allowLegacy = false;
+            if (ChangePayloadReader.NeedsLegacyConfirmation(entry))
+            {
+                if (MessageBox.Show(this, "This older undo entry has no content fingerprint. The application cannot verify whether its files have changed since the action.\r\n\r\n" + entry.Summary + "\r\n\r\nContinue with this undo?", "Older Undo Entry", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                    throw new InvalidOperationException("Undo cancelled; entry and backups retained.");
+                allowLegacy = true;
+            }
             switch (entry.Kind)
             {
                 case ChangeLogKind.Copy:
-                    RollbackCopy(GetPathChanges(entry.PayloadJson));
+                    foreach (PathPairChange change in ChangePayloadReader.Paths(entry.PayloadJson))
+                    { FileUndoOperations.UndoCopy(change, allowLegacy); RefreshUndoItem(change.DestinationPath); }
                     break;
                 case ChangeLogKind.Move:
-                    RollbackMove(GetPathChanges(entry.PayloadJson));
-                    break;
-                case ChangeLogKind.DateUpdate:
-                    RollbackDateUpdate(GetDateUpdateChanges(entry.PayloadJson));
+                    foreach (PathPairChange change in ChangePayloadReader.Paths(entry.PayloadJson))
+                    { FileUndoOperations.UndoMove(change, allowLegacy); RefreshUndoItem(change.DestinationPath); RefreshUndoItem(change.SourcePath); }
                     break;
                 case ChangeLogKind.Rename:
-                    RollbackRename(GetPathChanges(entry.PayloadJson));
+                    foreach (PathPairChange change in ChangePayloadReader.Paths(entry.PayloadJson))
+                    { FileUndoOperations.UndoRename(change, allowLegacy); _grid.RemoveItems(new[] { change.DestinationPath }); RefreshUndoItem(change.SourcePath); }
                     break;
                 case ChangeLogKind.Convert:
-                    RollbackConvert(GetConvertedPaths(entry.PayloadJson));
+                    foreach (ConvertFileChange change in ChangePayloadReader.Conversions(entry.PayloadJson))
+                    { FileUndoOperations.UndoConvert(change, allowLegacy); _grid.RemoveItems(new[] { change.CreatedPath }); }
                     break;
                 case ChangeLogKind.Rotate:
-                    RollbackRotate(GetRotateChanges(entry.PayloadJson));
+                case ChangeLogKind.Autocrop:
+                    foreach (RotateBackupChange change in ChangePayloadReader.Edits(entry.PayloadJson))
+                    { FileUndoOperations.UndoEdit(change, allowLegacy); RefreshUndoItem(change.FilePath); }
                     break;
                 case ChangeLogKind.Delete:
-                    RollbackDelete(GetDeleteChanges(entry.PayloadJson));
+                    foreach (DeleteBackupChange change in ChangePayloadReader.Deletes(entry.PayloadJson))
+                    { FileUndoOperations.UndoDelete(change, allowLegacy); RefreshUndoItem(change.OriginalPath); }
+                    break;
+                case ChangeLogKind.DateUpdate:
+                    foreach (DateUpdateFileChange change in ChangePayloadReader.Dates(entry.PayloadJson))
+                    {
+                        if (!string.IsNullOrEmpty(change.BackupPath))
+                            FileUndoOperations.UndoEdit(new RotateBackupChange { FilePath = change.FilePath, BackupPath = change.BackupPath, BackupHash = change.BackupHash, EditedHash = change.EditedHash }, allowLegacy);
+                        else { FileSafety.RequireHash(change.FilePath, null, allowLegacy); PhotoMetadataHelper.UpdateDateTakenAndModified(change.FilePath, change.OldDate); }
+                        RefreshUndoItem(change.FilePath);
+                    }
                     break;
                 case ChangeLogKind.Rating:
-                    RollbackRating(GetRatingChanges(entry.PayloadJson));
+                    foreach (RatingFileChange change in ChangePayloadReader.Ratings(entry.PayloadJson))
+                    {
+                        if (!File.Exists(change.FilePath) || !PhotoMetadataHelper.SupportsShellRating(change.FilePath)) throw new IOException("Required rating file is missing or unsupported: " + change.FilePath);
+                        ShellRatingHelper.WriteRating(change.FilePath, change.OldRatingHasValue ? (int?)change.OldRating : null);
+                        RefreshUndoItem(change.FilePath);
+                    }
                     break;
                 case ChangeLogKind.SessionSettings:
                     RollbackSessionSettings(ChangeLogStore.Deserialize<SessionSettingsChangePayload>(entry.PayloadJson));
                     break;
+                default: throw new InvalidDataException("Unsupported undo action; entry retained.");
             }
-        }
-
-        private void RollbackCopy(List<PathPairChange> paths)
-        {
-            foreach (PathPairChange path in paths)
-            {
-                if (File.Exists(path.DestinationPath))
-                {
-                    File.Delete(path.DestinationPath);
-                    _grid.RemoveItems(new[] { path.DestinationPath });
-                }
-            }
-
             UpdateSelectionDetails();
         }
 
-        private void RollbackMove(List<PathPairChange> paths)
+        private void RefreshUndoItem(string path)
         {
-            foreach (PathPairChange path in paths)
-            {
-                if (!File.Exists(path.DestinationPath))
-                {
-                    continue;
-                }
-
-                if (File.Exists(path.SourcePath))
-                {
-                    throw new InvalidOperationException("Cannot restore moved file because the original path is already occupied: " + path.SourcePath);
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(path.SourcePath));
-                File.Move(path.DestinationPath, path.SourcePath);
-                _grid.RemoveItems(new[] { path.DestinationPath });
-                AddGridItems(new[] { path.SourcePath });
-            }
-
-            UpdateSelectionDetails();
+            if (!File.Exists(path)) { _grid.RemoveItems(new[] { path }); return; }
+            if (_grid.IndexOf(path) < 0 && !_currentSession.GetSourceFolders().Any(root => IsPathInSourceRoot(path, root))) return;
+            PhotoItem item;
+            try { item = CreatePhotoItem(path); }
+            catch { item = PhotoMetadataHelper.CreatePlaceholderPhotoItem(path); }
+            _grid.RefreshItem(path, item);
         }
-
-        private void RollbackDateUpdate(List<DateUpdateFileChange> files)
-        {
-            foreach (DateUpdateFileChange file in files)
-            {
-                if (File.Exists(file.FilePath))
-                {
-                    PhotoMetadataHelper.UpdateDateTakenAndModified(file.FilePath, file.OldDate);
-                    UpdateGridItem(file.FilePath);
-                }
-            }
-        }
-
-        private void RollbackRename(List<PathPairChange> paths)
-        {
-            foreach (PathPairChange path in paths)
-            {
-                if (!File.Exists(path.DestinationPath))
-                {
-                    continue;
-                }
-
-                if (File.Exists(path.SourcePath))
-                {
-                    throw new InvalidOperationException("Cannot restore renamed file because the original path is already occupied: " + path.SourcePath);
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(path.SourcePath));
-                File.Move(path.DestinationPath, path.SourcePath);
-                ReplaceGridItem(path.DestinationPath, path.SourcePath);
-            }
-        }
-
-        private void RollbackConvert(List<string> createdPaths)
-        {
-            foreach (string filePath in createdPaths)
-            {
-                if (File.Exists(filePath))
-                {
-                    File.Delete(filePath);
-                }
-            }
-
-            _grid.RemoveItems(createdPaths);
-            UpdateSelectionDetails();
-        }
-
-        private void RollbackRotate(List<RotateBackupChange> files)
-        {
-            foreach (RotateBackupChange file in files)
-            {
-                if (File.Exists(file.BackupPath))
-                {
-                    File.Copy(file.BackupPath, file.FilePath, true);
-                    UpdateGridItem(file.FilePath);
-                }
-            }
-        }
-
-        private void RollbackDelete(List<DeleteBackupChange> files)
-        {
-            foreach (DeleteBackupChange file in files)
-            {
-                if (!File.Exists(file.BackupPath))
-                {
-                    continue;
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(file.OriginalPath));
-                if (File.Exists(file.OriginalPath))
-                {
-                    throw new InvalidOperationException("Cannot restore deleted file because the original path is already occupied: " + file.OriginalPath);
-                }
-
-                File.Copy(file.BackupPath, file.OriginalPath, true);
-                AddGridItems(new[] { file.OriginalPath });
-            }
-
-            UpdateSelectionDetails();
-        }
-
-        private void RollbackRating(List<RatingFileChange> files)
-        {
-            foreach (RatingFileChange file in files)
-            {
-                if (!File.Exists(file.FilePath) || !PhotoMetadataHelper.SupportsShellRating(file.FilePath))
-                {
-                    continue;
-                }
-
-                ShellRatingHelper.WriteRating(file.FilePath, file.OldRatingHasValue ? (int?)file.OldRating : null);
-                UpdateGridItem(file.FilePath);
-            }
-        }
-
         private void RollbackSessionSettings(SessionSettingsChangePayload payload)
         {
             if (payload == null || payload.PreviousSession == null)
@@ -1611,96 +1516,6 @@ namespace PictureOrganizer
                     UpdateSelectionDetails();
                 }
             }
-        }
-
-        private List<PathPairChange> GetPathChanges(string payloadJson)
-        {
-            PathPairChange single;
-            if (ChangeLogStore.TryDeserialize<PathPairChange>(payloadJson, out single))
-            {
-                return new List<PathPairChange> { single };
-            }
-
-            CopyMoveChangePayload movePayload;
-            if (ChangeLogStore.TryDeserialize<CopyMoveChangePayload>(payloadJson, out movePayload))
-            {
-                return movePayload.Paths ?? new List<PathPairChange>();
-            }
-
-            RenameChangePayload renamePayload;
-            return ChangeLogStore.TryDeserialize<RenameChangePayload>(payloadJson, out renamePayload)
-                ? renamePayload.Paths ?? new List<PathPairChange>()
-                : new List<PathPairChange>();
-        }
-
-        private List<DateUpdateFileChange> GetDateUpdateChanges(string payloadJson)
-        {
-            DateUpdateFileChange single;
-            if (ChangeLogStore.TryDeserialize<DateUpdateFileChange>(payloadJson, out single))
-            {
-                return new List<DateUpdateFileChange> { single };
-            }
-
-            DateUpdateChangePayload payload;
-            return ChangeLogStore.TryDeserialize<DateUpdateChangePayload>(payloadJson, out payload)
-                ? payload.Files ?? new List<DateUpdateFileChange>()
-                : new List<DateUpdateFileChange>();
-        }
-
-        private List<string> GetConvertedPaths(string payloadJson)
-        {
-            ConvertFileChange single;
-            if (ChangeLogStore.TryDeserialize<ConvertFileChange>(payloadJson, out single))
-            {
-                return new List<string> { single.CreatedPath };
-            }
-
-            ConvertChangePayload payload;
-            return ChangeLogStore.TryDeserialize<ConvertChangePayload>(payloadJson, out payload)
-                ? payload.CreatedPaths ?? new List<string>()
-                : new List<string>();
-        }
-
-        private List<RotateBackupChange> GetRotateChanges(string payloadJson)
-        {
-            RotateBackupChange single;
-            if (ChangeLogStore.TryDeserialize<RotateBackupChange>(payloadJson, out single))
-            {
-                return new List<RotateBackupChange> { single };
-            }
-
-            RotateChangePayload payload;
-            return ChangeLogStore.TryDeserialize<RotateChangePayload>(payloadJson, out payload)
-                ? payload.Files ?? new List<RotateBackupChange>()
-                : new List<RotateBackupChange>();
-        }
-
-        private List<DeleteBackupChange> GetDeleteChanges(string payloadJson)
-        {
-            DeleteBackupChange single;
-            if (ChangeLogStore.TryDeserialize<DeleteBackupChange>(payloadJson, out single))
-            {
-                return new List<DeleteBackupChange> { single };
-            }
-
-            DeleteChangePayload payload;
-            return ChangeLogStore.TryDeserialize<DeleteChangePayload>(payloadJson, out payload)
-                ? payload.Files ?? new List<DeleteBackupChange>()
-                : new List<DeleteBackupChange>();
-        }
-
-        private List<RatingFileChange> GetRatingChanges(string payloadJson)
-        {
-            RatingFileChange single;
-            if (ChangeLogStore.TryDeserialize<RatingFileChange>(payloadJson, out single))
-            {
-                return new List<RatingFileChange> { single };
-            }
-
-            RatingChangePayload payload;
-            return ChangeLogStore.TryDeserialize<RatingChangePayload>(payloadJson, out payload)
-                ? payload.Files ?? new List<RatingFileChange>()
-                : new List<RatingFileChange>();
         }
 
         private Control CreateHeaderPair(string title, out Label valueLabel, int height = 60)
@@ -1868,3 +1683,5 @@ namespace PictureOrganizer
         }
     }
 }
+
+

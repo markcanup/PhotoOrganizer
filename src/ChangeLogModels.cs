@@ -49,7 +49,9 @@ namespace PictureOrganizer
         [EnumMember]
         Rating,
         [EnumMember]
-        SessionSettings
+        SessionSettings,
+        [EnumMember]
+        Autocrop
     }
 
     [DataContract]
@@ -60,6 +62,15 @@ namespace PictureOrganizer
 
         [DataMember]
         public string DestinationPath { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string DestinationHash { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string ReplacedBackupPath { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string ReplacedHash { get; set; }
     }
 
     [DataContract]
@@ -97,6 +108,9 @@ namespace PictureOrganizer
 
         [DataMember]
         public string CreatedPath { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string CreatedHash { get; set; }
     }
 
     [DataContract]
@@ -107,6 +121,9 @@ namespace PictureOrganizer
 
         [DataMember]
         public string BackupPath { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string BackupHash { get; set; }
     }
 
     [DataContract]
@@ -126,6 +143,12 @@ namespace PictureOrganizer
 
         [DataMember]
         public string BackupPath { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string BackupHash { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string EditedHash { get; set; }
     }
 
     [DataContract]
@@ -148,6 +171,15 @@ namespace PictureOrganizer
 
         [DataMember]
         public DateTime NewDate { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string BackupPath { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string BackupHash { get; set; }
+
+        [DataMember(EmitDefaultValue = false)]
+        public string EditedHash { get; set; }
     }
 
     [DataContract]

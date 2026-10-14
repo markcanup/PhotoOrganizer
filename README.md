@@ -54,6 +54,12 @@ The build currently uses the .NET Framework C# compiler directly and stamps Wind
 - `HEIC` / `HEIF` viewing, thumbnails, compare, and conversion are supported.
 - `HEIC` / `HEIF` rotate and autocrop are currently disabled to avoid writing back an invalid file format.
 
+## File Safety and Tests
+
+Write actions prepare their output and persist a per-file recovery record before committing it. Image edits use atomic replacement, and overwritten copy/move destinations have undo backups. Autocrop provides an original/crop preview with Apply, Skip, and Cancel batch options. Undo checks SHA-256 content fingerprints and retains failed entries; legacy records without fingerprints require confirmation.
+
+Run the regression suite with `powershell -ExecutionPolicy Bypass -File .\tests\run-tests.ps1`. It creates disposable image fixtures under `tests\.runs`, uses an isolated journal rather than the user's configuration or history, and renders the crop preview to `tests\bin\crop-preview.png`. Hard-link tests are reported as skipped if the environment prevents creating their fixture.
+
 ## Runtime Storage
 
 - Session config: `C:\ProgramData\PhotoOrganizer\PhotoOrganizer.config`

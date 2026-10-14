@@ -164,7 +164,7 @@
         <li><span class="icon date">D</span>Date update: updates EXIF date taken and file modified time when supported.</li>
         <li><span class="icon rename">R</span>Rename: edits a file name directly or applies a saved rename rule.</li>
         <li><span class="icon convert">F</span>Convert: creates a JPEG or PNG copy of the selected file.</li>
-        <li><span class="icon autocrop">A</span>Autocrop: runs the built-in crop logic on supported image files.</li>
+        <li><span class="icon autocrop">A</span>Autocrop: shows the original and proposed crop side by side. Choose Apply crop, Skip file, or Cancel batch. Applied crops have undo backups.</li>
         <li><span class="icon rotate">O</span>Rotate: rotates the selected image files.</li>
         <li><span class="icon delete">X</span>Delete: removes selected files from the source and can use the Recycle Bin when available.</li>
         <li><span class="icon rating">*</span>Rating: clears or sets a Windows-style image rating for supported files.</li>
@@ -203,7 +203,11 @@
       <p>The Undo window shows recent changes for the current session.</p>
       <ul>
         <li>Each entry includes the timestamp, action, and file details.</li>
-        <li>Undo Selected rolls back the selected changes and removes them from the log.</li>
+        <li>Undo Selected rolls back successful changes and removes those entries from the log. Failed changes retain their entries and backups.</li>
+        <li>Undo checks file content before deleting or replacing it. Changed files, missing backups, and occupied restore paths are reported instead of being overwritten.</li>
+        <li>Older undo records without content fingerprints require confirmation before undo.</li>
+        <li>Copy and move overwrites keep a backup of the previous destination so undo can restore it. Transfers to the same file are rejected.</li>
+        <li>Batch actions report completed, skipped, and failed files. Earlier completed actions remain undoable if a later file fails.</li>
         <li>Clear Selected removes selected log entries without changing any files.</li>
       </ul>
 

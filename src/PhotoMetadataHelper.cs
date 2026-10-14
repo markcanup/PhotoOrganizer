@@ -286,16 +286,19 @@ namespace PictureOrganizer
             string tempPath = Path.Combine(Path.GetDirectoryName(filePath), Guid.NewGuid().ToString("N") + Path.GetExtension(filePath));
             string exifValue = newDate.ToString("yyyy:MM:dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + '\0';
 
-            using (Bitmap bitmap = new Bitmap(filePath))
+            try
             {
-                SetProperty(bitmap, ExifDateTakenId, exifValue);
-                SetProperty(bitmap, ExifDateDigitizedId, exifValue);
-                SetProperty(bitmap, ExifDateModifiedId, exifValue);
-                PdfPhotoProcessor.SaveBitmap(bitmap, tempPath, GetTargetFormat(Path.GetExtension(filePath)));
+                using (Bitmap bitmap = new Bitmap(filePath))
+                {
+                    SetProperty(bitmap, ExifDateTakenId, exifValue);
+                    SetProperty(bitmap, ExifDateDigitizedId, exifValue);
+                    SetProperty(bitmap, ExifDateModifiedId, exifValue);
+                    PdfPhotoProcessor.SaveBitmap(bitmap, tempPath, GetTargetFormat(Path.GetExtension(filePath)));
+                }
+                FileSafety.ValidateImage(tempPath);
+                FileSafety.Publish(tempPath, filePath, true);
             }
-
-            File.Copy(tempPath, filePath, true);
-            File.Delete(tempPath);
+            finally { if (File.Exists(tempPath)) File.Delete(tempPath); }
         }
 
         private static void SetProperty(Image image, int id, string value)

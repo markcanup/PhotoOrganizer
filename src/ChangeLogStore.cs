@@ -16,6 +16,7 @@ namespace PictureOrganizer
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(Serialize(entry) + Environment.NewLine);
                 stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true);
             }
         }
 
@@ -34,12 +35,22 @@ namespace PictureOrganizer
                 return;
             }
 
-            List<ChangeLogEntry> remaining = LoadAll().Where(item => !toRemove.Contains(item.EntryId)).ToList();
+            // Preserve unreadable lines rather than discarding unrelated recovery records during compaction.
+            List<string> remaining = new List<string>();
+            if (File.Exists(AppPaths.ChangeLogFilePath))
+            {
+                foreach (string line in File.ReadAllLines(AppPaths.ChangeLogFilePath))
+                {
+                    ChangeLogEntry entry;
+                    if (!TryDeserialize<ChangeLogEntry>(line, out entry) || entry == null || !toRemove.Contains(entry.EntryId)) remaining.Add(line);
+                }
+            }
             RewriteAll(remaining);
         }
 
         public static string CreateBackupPath(string entryId, string filePath)
         {
+            ValidateEntryId(entryId);
             string directory = Path.Combine(AppPaths.UndoBackupDirectory, entryId);
             Directory.CreateDirectory(directory);
             return Path.Combine(directory, Guid.NewGuid().ToString("N") + Path.GetExtension(filePath));
@@ -47,11 +58,18 @@ namespace PictureOrganizer
 
         public static void DeleteBackupFolder(string entryId)
         {
+            ValidateEntryId(entryId);
             string directory = Path.Combine(AppPaths.UndoBackupDirectory, entryId);
             if (Directory.Exists(directory))
             {
                 Directory.Delete(directory, true);
             }
+        }
+
+        private static void ValidateEntryId(string entryId)
+        {
+            Guid parsed;
+            if (!Guid.TryParseExact(entryId, "N", out parsed)) throw new InvalidDataException("Invalid undo entry ID.");
         }
 
         public static string Serialize<T>(T value)
@@ -104,7 +122,8 @@ namespace PictureOrganizer
 
                 try
                 {
-                    entries.Add(Deserialize<ChangeLogEntry>(line));
+                    ChangeLogEntry entry = Deserialize<ChangeLogEntry>(line);
+                    if (entry != null) entries.Add(entry);
                 }
                 catch
                 {
@@ -114,16 +133,19 @@ namespace PictureOrganizer
             return entries;
         }
 
-        private static void RewriteAll(List<ChangeLogEntry> entries)
+        private static void RewriteAll(List<string> entries)
         {
             Directory.CreateDirectory(AppPaths.ConfigDirectory);
-            using (StreamWriter writer = new StreamWriter(AppPaths.ChangeLogFilePath, false, Encoding.UTF8))
+            string temporaryPath = FileSafety.TemporaryPath(AppPaths.ChangeLogFilePath);
+            try
             {
-                foreach (ChangeLogEntry entry in entries)
+                using (StreamWriter writer = new StreamWriter(temporaryPath, false, Encoding.UTF8))
                 {
-                    writer.WriteLine(Serialize(entry));
+                    foreach (string entry in entries) writer.WriteLine(entry);
                 }
+                FileSafety.Publish(temporaryPath, AppPaths.ChangeLogFilePath, File.Exists(AppPaths.ChangeLogFilePath));
             }
+            finally { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); }
         }
     }
 }
